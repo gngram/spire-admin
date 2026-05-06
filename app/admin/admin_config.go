@@ -1,63 +1,125 @@
-package main
+package spidar_config
 
 import (
-	"encoding/json"
+	"embed"
 	"fmt"
-	"log"
 	"os"
+	"path/filepath"
+
+	"github.com/hashicorp/hcl/v2"
+
+	agentruntime "github.com/spiffe/spire/cmd/spire-agent/cli/run"
+	serverruntime "github.com/spiffe/spire/cmd/spire-server/cli/run"
+	"github.com/spiffe/spire/pkg/agent"
+	"github.com/spiffe/spire/pkg/common/config"
+	"github.com/spiffe/spire/pkg/common/telemetry/server"
+	"github.com/spiffe/spire/pkg/server"
 )
 
-type BindAddressConfig struct {
-	IP   string `json:"ip"`
-	Port int    `json:"port"`
+//go:embed system-config.hcl
+var systemConfig embed.FS
+
+//go:embed agent.hcl
+var agentConfig embed.FS
+
+type WorkloadConfig struct {
+	WorkloadManager WorkloadManager `hcl:"workloads,block"`
+	Remaining       hcl.Body        `hcl:",remain"`
 }
 
-type DataStoreConfig struct {
-	Type             string `json:"type"`
-	ConnectionString string `json:"connection_string"`
+type WorkloadManager struct {
+	Servers []SpireServer `hcl:"spire_server,block"`
 }
 
-type AdminConfig struct {
-	Socket  string                 `json:"agent_socket"`
-	TrustDomain  string            `json:"trust_domain"`
-	DataDir      string            `json:"data_dir"`
-	RuntimeDir   string            `json:"runtime_dir"`
-	BindAddress  BindAddressConfig `json:"bind_address"`
-	DataStore    DataStoreConfig   `json:"data_store"`
+type SpireServer struct {
+	TrustDomain string     `hcl:"name,label"`
+	Entries     []Workload `hcl:"workload,block"`
 }
 
-func defaultConfig() *AdminConfig {
-	return &AdminConfig{
-		Socket:  "/run/spidar/spidar_admin.sock",
-		TrustDomain:  "example.org",
-		DataDir:      "/var/lib/spidar",
-		RuntimeDir: "/run/spidar",
-		BindAddress: BindAddressConfig{
-			IP:   "127.0.0.1",
-			Port: 8081,
-		},
-		DataStore: DataStoreConfig{
-			Type:             "sqlite3",
-			ConnectionString: "./data/datastore.sqlite3",
-		},
-	}
+type Workload struct {
+	Name      string   `hcl:"name,label"`
+	SpiffeID  string   `hcl:"spiffe_id"`
+	ParentID  string   `hcl:"parent_id"`
+	Selectors []string `hcl:"selectors"`
 }
 
-func LoadConfig(path string) (*AdminConfig, error) {
-	cfg := defaultConfig()
-
-	data, err := os.ReadFile(path)
+func LoadWorkloadConfig(filename string) (*WorkloadConfig, error) {
+	source, err := os.ReadFile(filename)
 	if err != nil {
-		if os.IsNotExist(err) {
-			log.Printf("config file %q not found, using defaults", path)
-			return cfg, nil
+		return nil, fmt.Errorf("could not read file %s: %w", filename, err)
+	}
+
+	parser := hclparse.NewParser()
+
+	file, diags := parser.ParseHCL(source, filename)
+	if diags.HasErrors() {
+		return nil, diags
+	}
+
+	var cfg RootConfig
+	diags = gohcl.DecodeBody(file.Body, nil, &cfg)
+	if diags.HasErrors() {
+		return nil, diags
+	}
+
+	return &cfg, nil
+}
+
+func ParseFile(path string) (*server.Config, error) {
+	c := &server.Config{}
+
+	byteData, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			msg := "could not determine CWD; config file not found at %s: use -config"
+			return nil, fmt.Errorf("config file not found at %s", path)
 		}
-		return nil, fmt.Errorf("reading config file %q: %w", path, err)
+
+		msg := "could not find config file %s: please use the -config flag"
+		return nil, fmt.Errorf("config file not found at %s", absPath)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("unable to read configuration at %q: %w", path, err)
+	}
+	data := string(byteData)
+
+	// If envTemplate flag is passed, substitute $VARIABLES in configuration file
+	if expandEnv {
+		data = config.ExpandEnv(data)
 	}
 
-	if err := json.Unmarshal(data, cfg); err != nil {
-		return nil, fmt.Errorf("parsing config file %q: %w", path, err)
+	if err := hcl.Decode(&c, data); err != nil {
+		return nil, fmt.Errorf("unable to decode configuration at %q: %w", path, err)
 	}
 
-	return cfg, nil
+	return c, nil
+}
+
+func LoadConfig(hclPath string, allowUnknownConfig bool) (*server.Config, WorkloadConfig, error) {
+	fileInput, err := serverruntime.ParseFile(hclPath, true)
+	if err != nil {
+		return nil, err
+	}
+
+	serverConfig, err := serverruntime.NewServerConfig(fileInput, nil, allowUnknownConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	workloadConfig, err := LoadWorkloadConfig(hclPath)
+	if err != nil {
+		return serverConfig, nil, err
+	}
+
+	return serviceConfig, workloadConfig, nil
+}
+
+func LoadAgentConfig() (*agent.Config, error) {
+	fileInput, err := agentruntime.ParseFile(hclPath, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return agentruntime.NewAgentConfig(fileInput, nil, allowUnknownConfig)
 }

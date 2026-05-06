@@ -18,6 +18,7 @@
         in {
           default = pkgs.mkShell {
             buildInputs = with pkgs; [
+              nodejs
               go
               gopls
               go-tools
@@ -29,6 +30,7 @@
             GO111MODULE = "on";
 
             shellHook = ''
+              alias gemini="npx @google/gemini-cli"
               export GOPATH="$PWD/.gopath"
               echo "Go dev shell activated (via Flake)"
               echo "Tidying up and downloading missing Go modules..."

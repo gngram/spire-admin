@@ -1,10 +1,6 @@
-package config
+package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
-
 )
 
 type AdminConfig struct {

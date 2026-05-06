@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"os"
+
 	log "github.com/sirupsen/logrus"
 )
 
@@ -21,20 +22,18 @@ func setupLogger(logLevel string) {
 	log.Info("Service running")
 }
 
-
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	configPath := flag.String("config", "server.json", "Path to config file")
+	configPath := flag.String("config", "./admin.hcl", "Path to config file")
 	logLevel := flag.String("log-level", "info", "Log level (e.g. debug, info, warn, error)")
 	flag.Parse()
 
 	log.Printf("Starting admin server with log level: %s", *logLevel)
 	setupLogger(*logLevel)
 
-
-	cfg, err := LoadConfig(*configPath)
+	cfg, err := LoadConfig(*configPath, true)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
