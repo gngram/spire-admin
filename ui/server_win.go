@@ -13,13 +13,15 @@ import (
 	"github.com/gngram/spire_admin/servers"
 )
 
-func ShowServerWindow(spireServer *servers.SpireServer) {
+func ShowServerWindow(spireServer *servers.SpireServer, width uint16, height uint16) {
 	title := "Server Details"
 	if spireServer != nil {
 		title = "Server: " + spireServer.Address
 	}
 	aw := fyne.CurrentApp().NewWindow(title)
-	aw.Resize(fyne.NewSize(1020, 700))
+	aw.Resize(fyne.NewSize(float32(width), float32(height)))
+	aw.SetFixedSize(true)
+	aw.CenterOnScreen()
 
 	if spireServer == nil {
 		dialog.ShowError(errors.New("server is nil"), aw)

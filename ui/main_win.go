@@ -52,6 +52,8 @@ type SpireAdminApp struct {
 	RefreshUI    func()
 	CurrentTheme string
 	CurrentView  string
+	windowWidth  uint16
+	windowHeight uint16
 }
 
 func NewSpireAdminApp(parentSocket string) *SpireAdminApp {
@@ -293,7 +295,7 @@ func (a *SpireAdminApp) buildServerRow(srv *Server, refresh func()) fyne.CanvasO
 		container.New(layout.NewGridWrapLayout(fyne.NewSize(32, 32)), iconBg),
 		container.NewCenter(iconLbl),
 	), func() {
-		ShowServerWindow(srv.Server)
+		ShowServerWindow(srv.Server, a.windowWidth, a.windowHeight)
 	})
 
 	iconChip.onHoverIn = func() {
@@ -626,8 +628,10 @@ func (a *SpireAdminApp) buildContent(refresh func()) fyne.CanvasObject {
 //  MAIN
 // ════════════════════════════════════════════════════════
 
-func OpenDashboard(parentSocket string) {
+func OpenDashboard(parentSocket string, width uint16, height uint16) {
 	adm := NewSpireAdminApp(parentSocket)
+	adm.windowWidth = width
+	adm.windowHeight = height
 	adm.fyneApp = app.NewWithID("com.github.gngram.spire_admin")
 	adm.fyneApp.Settings().SetTheme(&spireTheme{})
 
@@ -638,7 +642,10 @@ func OpenDashboard(parentSocket string) {
 	})
 
 	adm.window = adm.fyneApp.NewWindow("spire-admin")
-	adm.window.Resize(fyne.NewSize(1020, 700))
+	adm.window.Resize(fyne.NewSize(float32(width), float32(height)))
+	adm.window.CenterOnScreen()
+	adm.window.SetMaster()
+	adm.window.SetFixedSize(true)
 
 	// Seed with demo data
 	// adm.AddServer("Production Server", "spire-prod.example.com", "8081")
