@@ -3,20 +3,39 @@ package servers
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gngram/spidar/logger"
 	agentv1 "github.com/spiffe/spire-api-sdk/proto/spire/api/server/agent/v1"
 	"github.com/spiffe/spire-api-sdk/proto/spire/api/types"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // Agent represents a SPIRE Agent connected to the server.
 type Agent struct {
-	SPIFFEID string
+	SPIFFEID        string
+	AttestationType string
+	ExpirationTime  int64
+	SerialNumber    string
+	CanReattest     bool
+	AgentVersion    string
 }
 
+// String returns the agent info in a formatted string.
+func (a Agent) String() string {
+	expiration := "Unknown"
+	if a.ExpirationTime != 0 {
+		expiration = time.Unix(a.ExpirationTime, 0).String()
+	}
+	return fmt.Sprintf("SPIFFE ID         : %s\n"+
+		"Attestation type  : %s\n"+
+		"Expiration time   : %s\n"+
+		"Serial number     : %s\n"+
+		"Can re-attest     : %t\n"+
+		"Agent version     : %s",
+		a.SPIFFEID, a.AttestationType, expiration, a.SerialNumber, a.CanReattest, a.AgentVersion)
+}
 
 // ListAgents lists all agents connected to the SPIRE server.
 func (s *SpireServer) ListAgents(ctx context.Context, pull bool) ([]Agent, error) {
@@ -53,9 +72,16 @@ func (s *SpireServer) ListAgents(ctx context.Context, pull bool) ([]Agent, error
 			if a.Id != nil {
 				spiffeID = fmt.Sprintf("spiffe://%s%s", a.Id.TrustDomain, a.Id.Path)
 			}
-			allAgents = append(allAgents, Agent{SPIFFEID: spiffeID})
+			allAgents = append(allAgents, Agent{
+				SPIFFEID:        spiffeID,
+				AttestationType: a.AttestationType,
+				ExpirationTime:  a.X509SvidExpiresAt,
+				SerialNumber:    a.X509SvidSerialNumber,
+				CanReattest:     a.CanReattest,
+				AgentVersion:    a.AgentVersion,
+			})
 		}
-	
+
 		pageToken = resp.NextPageToken
 		if pageToken == "" {
 			logger.Info("Returning agents: %v", allAgents)
@@ -90,7 +116,7 @@ func (s *SpireServer) BanAgent(ctx context.Context, spiffeID string) error {
 		return err
 	}
 
-	id, err := parseSPIFFEID(spiffeID)
+	id, err := ParseSPIFFEID(spiffeID)
 	if err != nil {
 		logger.Error("Parse SPIFFE ID error", err)
 		return err
@@ -111,7 +137,7 @@ func (s *SpireServer) EvictAgent(ctx context.Context, spiffeID string) error {
 		return err
 	}
 
-	id, err := parseSPIFFEID(spiffeID)
+	id, err := ParseSPIFFEID(spiffeID)
 	if err != nil {
 		logger.Error("Parse SPIFFE ID error", err)
 		return err
@@ -125,25 +151,36 @@ func (s *SpireServer) EvictAgent(ctx context.Context, spiffeID string) error {
 	return err
 }
 
-// AgentDetails returns the details of the agent with the given SPIFFE ID.
-func (s *SpireServer) AgentDetails(ctx context.Context, spiffeID string) (*types.Agent, error) {
+// GetAgentInfo returns the details of the agent with the given SPIFFE ID.
+func (s *SpireServer) GetAgentInfo(ctx context.Context, spiffeID string) (string, error) {
 	if err := s.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
-		return nil, err
+		return "", err
 	}
 
-	id, err := parseSPIFFEID(spiffeID)
+	id, err := ParseSPIFFEID(spiffeID)
 	if err != nil {
 		logger.Error("Parse SPIFFE ID error", err)
-		return nil, err
+		return "", err
 	}
 
 	client := agentv1.NewAgentClient(s.conn)
 	resp, err := client.GetAgent(ctx, &agentv1.GetAgentRequest{Id: id})
 	if err != nil {
 		logger.Error("Failed to get agent details", err)
+		return "", err
 	}
-	return resp, err
+
+	agent := Agent{
+		SPIFFEID:        spiffeID,
+		AttestationType: resp.AttestationType,
+		ExpirationTime:  resp.X509SvidExpiresAt,
+		SerialNumber:    resp.X509SvidSerialNumber,
+		CanReattest:     resp.CanReattest,
+		AgentVersion:    resp.AgentVersion,
+	}
+
+	return agent.String(), nil
 }
 
 // PurgeExpiredAgents evicts all agents that have expired.
@@ -154,33 +191,35 @@ func (s *SpireServer) PurgeExpiredAgents(ctx context.Context) error {
 	}
 
 	client := agentv1.NewAgentClient(s.conn)
-	now := strconv.FormatInt(time.Now().Unix(), 10)
-
 	var errs []string
 	var pageToken string
 
 	for {
 		req := &agentv1.ListAgentsRequest{
 			Filter: &agentv1.ListAgentsRequest_Filter{
-				ByExpiresBefore: now,
+				ByCanReattest: wrapperspb.Bool(true),
 			},
-			PageToken: pageToken,
+			OutputMask: &types.AgentMask{X509SvidExpiresAt: true},
+			PageToken:  pageToken,
 		}
 
+		logger.Info("Purging expired agents...")
 		resp, err := client.ListAgents(ctx, req)
 		if err != nil {
-			logger.Error("Failed to list expired agents", err)
-			return fmt.Errorf("failed to list expired agents: %w", err)
+			logger.Error("Failed to list agents", err)
+			return fmt.Errorf("failed to list agents: %w", err)
 		}
 
 		for _, agent := range resp.Agents {
-			_, err := client.DeleteAgent(ctx, &agentv1.DeleteAgentRequest{Id: agent.Id})
-			if err != nil {
-				if agent.Id != nil {
+			if agent.Id == nil {
+				continue
+			}
+
+			expirationTime := time.Unix(agent.X509SvidExpiresAt, 0)
+			if time.Since(expirationTime) > 0 {
+				if _, err := client.DeleteAgent(ctx, &agentv1.DeleteAgentRequest{Id: agent.Id}); err != nil {
 					spiffeID := fmt.Sprintf("spiffe://%s%s", agent.Id.TrustDomain, agent.Id.Path)
 					errs = append(errs, fmt.Sprintf("failed to delete agent %s: %v", spiffeID, err))
-				} else {
-					errs = append(errs, fmt.Sprintf("failed to delete agent with missing ID: %v", err))
 				}
 			}
 		}

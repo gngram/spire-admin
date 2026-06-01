@@ -9,20 +9,22 @@ import (
 	"github.com/spiffe/spire-api-sdk/proto/spire/api/types"
 )
 
-// Workload represents a workload registered in the SPIRE server.
-type Workload struct {
+// Entry represents a workload/agent registered in the SPIRE server.
+type Entry struct {
+	ID        string
 	SPIFFEID  string
 	Selectors []string
 	Parent    string
+	Original  *types.Entry
 }
 
-// ListWorkloads lists all workloads (entries) registered in the SPIRE server.
-func (s *SpireServer) ListWorkloads(ctx context.Context, pull bool) ([]Workload, error) {
+// ListEntries lists all entries registered in the SPIRE server.
+func (s *SpireServer) ListEntries(ctx context.Context, pull bool) ([]Entry, error) {
 	if !pull {
 		s.mu.RLock()
-		if s.Workloads != nil {
+		if s.Entries != nil {
 			defer s.mu.RUnlock()
-			return s.Workloads, nil
+			return s.Entries, nil
 		}
 		s.mu.RUnlock()
 	}
@@ -33,7 +35,7 @@ func (s *SpireServer) ListWorkloads(ctx context.Context, pull bool) ([]Workload,
 	}
 
 	client := entryv1.NewEntryClient(s.conn)
-	var allWorkloads []Workload
+	var allEntries []Entry
 	var pageToken string
 
 	for {
@@ -65,10 +67,12 @@ func (s *SpireServer) ListWorkloads(ctx context.Context, pull bool) ([]Workload,
 				parent = fmt.Sprintf("spiffe://%s%s", e.ParentId.TrustDomain, e.ParentId.Path)
 			}
 
-			allWorkloads = append(allWorkloads, Workload{
+			allEntries = append(allEntries, Entry{
+				ID:        e.Id,
 				SPIFFEID:  spiffeID,
 				Selectors: selectors,
 				Parent:    parent,
+				Original:  e,
 			})
 		}
 
@@ -79,10 +83,10 @@ func (s *SpireServer) ListWorkloads(ctx context.Context, pull bool) ([]Workload,
 	}
 
 	s.mu.Lock()
-	s.Workloads = allWorkloads
+	s.Entries = allEntries
 	s.mu.Unlock()
 
-	return allWorkloads, nil
+	return allEntries, nil
 }
 
 // CountEntries returns the total number of registration entries in the SPIRE server.

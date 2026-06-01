@@ -4,40 +4,46 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gngram/spidar/logger"
-	"github.com/spiffe/spire-api-sdk/proto/spire/api/types"
-	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"github.com/hashicorp/hcl/v2/gohcl"
+	"github.com/hashicorp/hcl/v2/hclparse"
+	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/spiffe/go-spiffe/v2/spiffegrpc/grpccredentials"
 	"github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
+	bundlev1 "github.com/spiffe/spire-api-sdk/proto/spire/api/server/bundle/v1"
+	"github.com/spiffe/spire-api-sdk/proto/spire/api/types"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/codes"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 )
 
 // SpireServer represents a connected SPIRE server and its aggregated state.
 type SpireServer struct {
-	mu               sync.RWMutex
-	Address          string
-	Port             string
-	Domain           string
+	mu           sync.RWMutex
+	Address      string
+	Port         string
+	Domain       string
 	AgentSocket  string
-	HealthStatus     ServerHealthStatus
-	LastUpdated      time.Time
+	HealthStatus ServerHealthStatus
+	LastUpdated  time.Time
 
-	ctx              context.Context
-	cancel           context.CancelFunc
-	OnHealthChange   func(ServerHealthStatus)
+	ctx            context.Context
+	cancel         context.CancelFunc
+	OnHealthChange func(ServerHealthStatus)
 
 	Agents           []Agent
-	Workloads        []Workload
+	Entries          []Entry
 	Bundles          []*types.Bundle
 	FederatedServers []FederatedServer
 
@@ -53,9 +59,9 @@ const (
 	Offline
 )
 
-
 // NewSpireServer initializes a SpireServer and asynchronously fetches its data.
 func NewSpireServer(address, port, agentSocket string) (*SpireServer, error) {
+	logger.Info("New Spire Server: %s:%s, socket:%s", address, port, agentSocket)
 	if net.ParseIP(address) == nil {
 		err := fmt.Errorf("invalid address: %s is not a valid IP address", address)
 		logger.Error("Invalid IP address", err)
@@ -69,31 +75,31 @@ func NewSpireServer(address, port, agentSocket string) (*SpireServer, error) {
 	}
 
 	s := &SpireServer{
-		Address:         address,
-		Port:            port,
-		AgentSocket:     agentSocket,
-		HealthStatus:    Connecting,
-		LastUpdated:     time.Now(),
-		Domain:          "Unknown",
+		Address:      address,
+		Port:         port,
+		AgentSocket:  agentSocket,
+		HealthStatus: Connecting,
+		LastUpdated:  time.Now(),
+		Domain:       "Unknown",
 	}
 
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 
 	// Load the remote SPIRE data asynchronously so the UI doesn't freeze
 	go func() {
-		s.fetchInfo() // Initial fetch
+		s.FetchInfo() // Initial fetch
 		if err := s.RefreshCache(s.ctx); err != nil {
 			logger.Error("RefreshCache failed", err)
 		}
 	}()
-	
+
 	return s, nil
 }
 
-func (s *SpireServer) fetchInfo() {
+func (s *SpireServer) FetchInfo() {
 	ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
 	defer cancel()
-   
+
 	if err := s.Connect(ctx); err != nil {
 		logger.Error("Error connecting to server", err)
 		s.mu.Lock()
@@ -102,7 +108,7 @@ func (s *SpireServer) fetchInfo() {
 		s.LastUpdated = time.Now()
 		cb := s.OnHealthChange
 		s.mu.Unlock()
-		
+
 		select {
 		case <-s.ctx.Done():
 			return
@@ -113,25 +119,25 @@ func (s *SpireServer) fetchInfo() {
 		}
 		return
 	}
-	if s.source != nil {
-		if svid, err := s.source.GetX509SVID(); err == nil {
-			s.mu.Lock()
-			if s.Domain == "Unknown" || s.Domain == "" {
-				s.Domain = svid.ID.TrustDomain().Name()
-			}
-			s.mu.Unlock()
+
+	bundleClient := bundlev1.NewBundleClient(s.conn)
+	if bundle, err := bundleClient.GetBundle(ctx, &bundlev1.GetBundleRequest{}); err == nil && bundle != nil {
+		s.mu.Lock()
+		if s.Domain == "Unknown" || s.Domain == "" {
+			s.Domain = bundle.TrustDomain
 		}
+		s.mu.Unlock()
 	}
 
 	logger.Info("Domain: %s", s.Domain)
-	
+
 	logger.Info("Checking health..")
 	client := healthpb.NewHealthClient(s.conn)
 	_, err := client.Check(ctx, &healthpb.HealthCheckRequest{})
 
 	s.mu.Lock()
 	oldStatus := s.HealthStatus
-	
+
 	if err != nil && status.Code(err) != codes.Unimplemented {
 		logger.Error("Error checking health", err)
 		s.HealthStatus = Offline
@@ -143,7 +149,7 @@ func (s *SpireServer) fetchInfo() {
 	newStatus := s.HealthStatus
 	cb := s.OnHealthChange
 	s.mu.Unlock()
-	
+
 	select {
 	case <-s.ctx.Done():
 		return
@@ -154,7 +160,7 @@ func (s *SpireServer) fetchInfo() {
 	}
 }
 
-func parseSPIFFEID(id string) (*types.SPIFFEID, error) {
+func ParseSPIFFEID(id string) (*types.SPIFFEID, error) {
 	if !strings.HasPrefix(id, "spiffe://") {
 		err := fmt.Errorf("invalid SPIFFE ID format")
 		logger.Error("Parse SPIFFE ID error", err)
@@ -172,7 +178,6 @@ func parseSPIFFEID(id string) (*types.SPIFFEID, error) {
 		Path:        path,
 	}, nil
 }
-
 
 func (s *SpireServer) Connect(ctx context.Context) error {
 	s.mu.Lock()
@@ -275,6 +280,13 @@ func (s *SpireServer) GetCachedHealthStatus() ServerHealthStatus {
 	return s.HealthStatus
 }
 
+// GetLastUpdated returns the last known update time in a thread-safe manner.
+func (s *SpireServer) GetLastUpdated() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.LastUpdated
+}
+
 // RefreshCache pulls the latest agents, workloads, bundles, and federations
 // from the remote SPIRE server and updates the local cache.
 func (s *SpireServer) RefreshCache(ctx context.Context) error {
@@ -282,8 +294,8 @@ func (s *SpireServer) RefreshCache(ctx context.Context) error {
 		return fmt.Errorf("failed to refresh agents: %w", err)
 	}
 
-	if _, err := s.ListWorkloads(ctx, true); err != nil {
-		return fmt.Errorf("failed to refresh workloads: %w", err)
+	if _, err := s.ListEntries(ctx, true); err != nil {
+		return fmt.Errorf("failed to refresh entries: %w", err)
 	}
 
 	if _, err := s.ListFederatedBundles(ctx, true); err != nil {
@@ -294,6 +306,51 @@ func (s *SpireServer) RefreshCache(ctx context.Context) error {
 		return fmt.Errorf("failed to refresh federations: %w", err)
 	}
 
-
 	return nil
+}
+
+// ════════════════════════════════════════════════════════
+//  HCL CONFIGURATION MANAGEMENT
+// ════════════════════════════════════════════════════════
+
+type AppConfig struct {
+	Servers []ServerConfig `hcl:"server,block"`
+}
+
+type ServerConfig struct {
+	Nickname string `hcl:"name,label"`
+	Address  string `hcl:"address,optional"`
+	Port     string `hcl:"port,optional"`
+}
+
+// SaveServersConfig saves the provided map of SpireServers to an HCL file.
+func SaveServersConfig(path string, servers map[string]*SpireServer) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	appCfg := &AppConfig{}
+	for nickname, s := range servers {
+		s.mu.RLock()
+		sc := ServerConfig{Nickname: nickname, Address: s.Address, Port: s.Port}
+		s.mu.RUnlock()
+		appCfg.Servers = append(appCfg.Servers, sc)
+	}
+	f := hclwrite.NewEmptyFile()
+	gohcl.EncodeIntoBody(appCfg, f.Body())
+	return os.WriteFile(path, f.Bytes(), 0o644)
+}
+
+// LoadServersConfig parses the list of ServerConfigs from an HCL file.
+func LoadServersConfig(path string) (*AppConfig, error) {
+	appCfg := &AppConfig{}
+	parser := hclparse.NewParser()
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, nil
+	}
+	file, diags := parser.ParseHCLFile(path)
+	if diags.HasErrors() {
+		return nil, diags
+	}
+	gohcl.DecodeBody(file.Body, nil, appCfg)
+	return appCfg, nil
 }
