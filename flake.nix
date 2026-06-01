@@ -20,6 +20,8 @@
             nativeBuildInputs = with pkgs; [
               pkg-config
               go
+              gotools
+              gofumpt
               spire
             ];
 
@@ -39,12 +41,14 @@
               glfw
               freetype
               dbus
+              openssl
             ];
             GO111MODULE = "on";
 
             shellHook = ''
               alias run="go run ."
               alias build="go build -o spidar"
+              alias fmt="gofumpt -l -w ."
               export GOPATH="$PWD/.gopath"
               echo "Go dev shell activated (via Flake)"
 
