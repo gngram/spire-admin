@@ -15,7 +15,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/gngram/spidar/servers"
+	"github.com/gngram/spire_admin/servers"
 )
 
 type agentRowWidget struct {

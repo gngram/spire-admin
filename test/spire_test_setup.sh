@@ -117,7 +117,7 @@ server {
     bind_port = ${ADMIN_SERVER_PORT}
     socket_path = "${ADMIN_SOCK}"
     trust_domain = "admin.app"
-    admin_ids = ["spiffe://admin.app/spidar-admin"]
+    admin_ids = ["spiffe://admin.app/spire_admin"]
     data_dir = "${ADMIN_DIR}/admin-server-data"
     log_level = "INFO"
     federation {
@@ -183,11 +183,11 @@ start_admin_agent() {
     -spiffeID   "spiffe://admin.app/admin-agent" \
     | awk '{print $2}')
 
-  log "Creating workload entry for spidar-admin..."
+  log "Creating workload entry for spire_admin..."
   spire-server entry create \
     -socketPath "$ADMIN_SOCK" \
     -parentID   spiffe://admin.app/admin-agent \
-    -spiffeID   spiffe://admin.app/spidar-admin \
+    -spiffeID   spiffe://admin.app/spire_admin \
     -selector   "unix:uid:$(id -u)" \
     -admin \
     -federatesWith spiffe://domain-a.test \
@@ -226,7 +226,7 @@ server {
     bind_port = ${server_port}
     socket_path = "${TEST_DIR}/test-server-${letter}.sock"
     trust_domain = "${domain}"
-    admin_ids = ["spiffe://admin.app/spidar-admin"]
+    admin_ids = ["spiffe://admin.app/spire_admin"]
     data_dir = "${TEST_DIR}/test-server-${letter}-data"
     log_level = "INFO"
     federation {
@@ -391,7 +391,7 @@ print_summary() {
   echo "  Admin (admin.app)"
   echo "    gRPC:            127.0.0.1:${ADMIN_SERVER_PORT}"
   echo "    Bundle endpoint: https://127.0.0.1:${ADMIN_BUNDLE_PORT}  (https_web)"
-  echo "    Workload:        spiffe://admin.app/spidar-admin"
+  echo "    Workload:        spiffe://admin.app/spire_admin"
   echo "    Logs:            ${ADMIN_DIR}/admin-server.log"
   echo "                     ${ADMIN_DIR}/admin-agent.log"
   echo ""

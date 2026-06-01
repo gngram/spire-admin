@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 
-	"github.com/gngram/spidar/app"
+	"github.com/gngram/spire_admin/app"
 )
 
 func main() {

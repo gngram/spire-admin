@@ -76,7 +76,7 @@ func TestIntegration_SpireServerCaches(t *testing.T) {
 		t.Errorf("Expected 2 agents, got %d", len(server.Agents))
 	}
 
-	// Server 1 should have 3 entries: 2 standard workloads + 1 spidar-admin workload
+	// Server 1 should have 3 entries: 2 standard workloads + 1 spire_admin-admin workload
 	if len(server.Workloads) != 3 {
 		t.Errorf("Expected 3 workloads, got %d", len(server.Workloads))
 	}

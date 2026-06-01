@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gngram/spidar/config"
+	"github.com/gngram/spire_admin/config"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 )
 

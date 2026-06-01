@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gngram/spidar/logger"
+	"github.com/gngram/spire_admin/logger"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclwrite"

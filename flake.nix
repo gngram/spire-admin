@@ -1,5 +1,5 @@
 {
-  description = "Spidar Go Development Environment";
+  description = "spire_admin Go Development Environment";
 
   inputs = {
     # Define your nixpkgs version here. 
@@ -47,14 +47,14 @@
 
             shellHook = ''
               alias run="go run ."
-              alias build="go build -o spidar"
+              alias build="go build -o spire_admin"
               alias fmt="find . -path ./.gopath -prune -o -name '*.go' -exec gofumpt -l -w {} +"
               export GOPATH="$PWD/.gopath"
               echo "Go dev shell activated (via Flake)"
 
               if [ ! -f go.mod ]; then
-                echo "Initializing Go module 'github.com/gngram/spidar'..."
-                go mod init github.com/gngram/spidar
+                echo "Initializing Go module 'github.com/gngram/spire_admin'..."
+                go mod init github.com/gngram/spire_admin
               fi
 
               echo "Tidying up and downloading missing Go modules..."

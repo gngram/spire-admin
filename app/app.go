@@ -4,8 +4,8 @@ import (
 	//	"fmt"
 
 	//	"fyne.io/fyne/v2/app"
-	//"github.com/gngram/spidar/config"
-	"github.com/gngram/spidar/ui"
+	//"github.com/gngram/spire_admin/config"
+	"github.com/gngram/spire_admin/ui"
 )
 
 func Run(parentSocket string) {
@@ -14,7 +14,7 @@ func Run(parentSocket string) {
 			ParentSocket: parentSocket,
 		}
 
-		myApp := app.NewWithID("com.github.gngram.spidar")
+		myApp := app.NewWithID("com.github.gngram.spire_admin")
 		myApp.Settings().SetTheme(ui.NewPurpleTheme())
 		fmt.Println("RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR")
 		fmt.Println(cfg.ParentSocket)

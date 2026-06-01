@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gngram/spidar/logger"
+	"github.com/gngram/spire_admin/logger"
 	localauthorityv1 "github.com/spiffe/spire-api-sdk/proto/spire/api/server/localauthority/v1"
 )
 

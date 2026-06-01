@@ -2,7 +2,7 @@
 .gopath/
 
 # Build output
-spidar
+spire_admin
 *.exe
 *.exe~
 *.test

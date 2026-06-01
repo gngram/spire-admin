@@ -16,8 +16,8 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/gngram/spidar/logger"
-	"github.com/gngram/spidar/servers"
+	"github.com/gngram/spire_admin/logger"
+	"github.com/gngram/spire_admin/servers"
 )
 
 // ════════════════════════════════════════════════════════
@@ -628,7 +628,7 @@ func (a *SpireAdminApp) buildContent(refresh func()) fyne.CanvasObject {
 
 func OpenDashboard(parentSocket string) {
 	adm := NewSpireAdminApp(parentSocket)
-	adm.fyneApp = app.NewWithID("com.github.gngram.spidar")
+	adm.fyneApp = app.NewWithID("com.github.gngram.spire_admin")
 	adm.fyneApp.Settings().SetTheme(&spireTheme{})
 
 	adm.fyneApp.Lifecycle().SetOnStopped(func() {
