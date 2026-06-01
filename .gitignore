@@ -1,0 +1,21 @@
+# Go
+.gopath/
+
+# Build output
+spidar
+*.exe
+*.exe~
+*.test
+*.out
+
+# Nix & direnv
+.direnv/
+result
+result-*
+
+# IDEs & OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

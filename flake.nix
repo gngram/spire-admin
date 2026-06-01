@@ -48,7 +48,7 @@
             shellHook = ''
               alias run="go run ."
               alias build="go build -o spidar"
-              alias fmt="gofumpt -l -w ."
+              alias fmt="find . -path ./.gopath -prune -o -name '*.go' -exec gofumpt -l -w {} +"
               export GOPATH="$PWD/.gopath"
               echo "Go dev shell activated (via Flake)"
 
