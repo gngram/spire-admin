@@ -13,7 +13,6 @@ import (
 	"github.com/gngram/spidar/servers"
 )
 
-
 func ShowServerWindow(spireServer *servers.SpireServer) {
 	title := "Server Details"
 	if spireServer != nil {
@@ -21,7 +20,7 @@ func ShowServerWindow(spireServer *servers.SpireServer) {
 	}
 	aw := fyne.CurrentApp().NewWindow(title)
 	aw.Resize(fyne.NewSize(1020, 700))
-	
+
 	if spireServer == nil {
 		dialog.ShowError(errors.New("server is nil"), aw)
 		aw.Show()
@@ -29,6 +28,7 @@ func ShowServerWindow(spireServer *servers.SpireServer) {
 	}
 
 	agentPane := buildAgentsContent(spireServer, aw)
+	entriesPane := buildEntriesContent(spireServer, aw)
 
 	bundleList := widget.NewList(
 		func() int { return len(spireServer.Bundles) },
@@ -44,14 +44,6 @@ func ShowServerWindow(spireServer *servers.SpireServer) {
 		func(id widget.ListItemID, o fyne.CanvasObject) {
 			fed := spireServer.FederatedServers[id]
 			o.(*widget.Label).SetText(fed.TrustDomain + " (" + fed.Address + ")")
-		},
-	)
-
-	workloadList := widget.NewList(
-		func() int { return len(spireServer.Workloads) },
-		func() fyne.CanvasObject { return widget.NewLabel("") },
-		func(id widget.ListItemID, o fyne.CanvasObject) {
-			o.(*widget.Label).SetText(spireServer.Workloads[id].SPIFFEID)
 		},
 	)
 
@@ -93,10 +85,10 @@ func ShowServerWindow(spireServer *servers.SpireServer) {
 	nav := container.NewVBox(
 		logoRow,
 		widget.NewSeparator(),
-		makeNavItem(theme.AccountIcon(), "Agents", agentPane, 0),
-		makeNavItem(theme.FolderIcon(), "Bundles", bundleList, 1),
-		makeNavItem(theme.StorageIcon(), "Federation", fedList, 2),
-		makeNavItem(theme.DocumentIcon(), "Workloads", workloadList, 3),
+		makeNavItem(theme.AccountIcon(), "Registered Agents", agentPane, 0),
+		makeNavItem(theme.FolderIcon(), "Trust Bundles", bundleList, 1),
+		makeNavItem(theme.StorageIcon(), "Dynamic Federation", fedList, 2),
+		makeNavItem(theme.DocumentIcon(), "Registered Entries", entriesPane, 3),
 	)
 
 	sidebar := container.NewStack(bg, container.NewBorder(nav, nil, nil, nil))

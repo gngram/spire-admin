@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"image/color"
-	"reflect"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -20,21 +20,50 @@ import (
 
 type agentRowWidget struct {
 	widget.BaseWidget
-	spiffeIDLbl  *widget.Label
-	statusLbl    *widget.Label
-	check        *widget.Check
-	container    *fyne.Container
+	spiffeIDTxt *canvas.Text
+	infoBtn     *clickableStack
+	evictBtn    *clickableStack
+	banBtn      *clickableStack
+	container   *fyne.Container
+	spiffeID    string
 }
 
 func newAgentRowWidget() *agentRowWidget {
 	r := &agentRowWidget{
-		spiffeIDLbl:  widget.NewLabel(""),
-		statusLbl:    widget.NewLabel(""),
-		check:        widget.NewCheck("", nil),
+		spiffeIDTxt: canvas.NewText("", clrText),
 	}
-	r.spiffeIDLbl.Truncation = fyne.TextTruncateEllipsis
+	r.spiffeIDTxt.Alignment = fyne.TextAlignLeading
 
-	r.container = container.NewBorder(nil, nil, r.check, r.statusLbl, r.spiffeIDLbl)
+	makeBtn := func(icon fyne.Resource) *clickableStack {
+		bg := canvas.NewRectangle(clrBg)
+		bg.CornerRadius = 6
+		ic := widget.NewIcon(icon)
+
+		btn := newClickableStack(container.NewStack(
+			container.New(layout.NewGridWrapLayout(fyne.NewSize(32, 32)), bg),
+			container.NewCenter(ic),
+		), nil)
+
+		btn.onHoverIn = func() {
+			bg.FillColor = clrBorder
+			bg.Refresh()
+		}
+		btn.onHoverOut = func() {
+			bg.FillColor = clrBg
+			bg.Refresh()
+		}
+		return btn
+	}
+
+	r.infoBtn = makeBtn(theme.InfoIcon())
+	r.evictBtn = makeBtn(theme.DeleteIcon())
+	r.banBtn = makeBtn(theme.MediaStopIcon())
+
+	actionGroup := container.NewHBox(r.infoBtn, r.evictBtn, r.banBtn)
+
+	content := container.NewBorder(nil, nil, nil, actionGroup, r.spiffeIDTxt)
+	rowBg := canvas.NewRectangle(clrCard)
+	r.container = container.NewStack(rowBg, content)
 	r.ExtendBaseWidget(r)
 	return r
 }
@@ -43,42 +72,94 @@ func (r *agentRowWidget) CreateRenderer() fyne.WidgetRenderer {
 	return widget.NewSimpleRenderer(r.container)
 }
 
-func showAgentDetails(details interface{}, window fyne.Window) {
-	v := reflect.ValueOf(details)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
+// CustomLabel wraps a standard label so we can override its minimum height
+type CustomLabel struct {
+	widget.Label
+	customHeight float32
+}
+
+func newCustomLabel(text string, bold bool, height float32) *CustomLabel {
+	l := &CustomLabel{customHeight: height}
+	l.Text = text
+	l.Alignment = fyne.TextAlignLeading
+	if bold {
+		l.TextStyle.Bold = true
 	}
-	if v.Kind() != reflect.Struct {
-		dialog.ShowInformation("Agent Details", fmt.Sprintf("%+v", details), window)
+	l.ExtendBaseWidget(l)
+	return l
+}
+
+// MinSize overrides the default padding size enforced by Fyne
+func (c *CustomLabel) MinSize() fyne.Size {
+	min := c.Label.MinSize()
+	return fyne.NewSize(min.Width, c.customHeight)
+}
+
+func showAgentInfo(details string, window fyne.Window) {
+	lines := strings.Split(details, "\n")
+
+	type pair struct{ key, val string }
+	var pairs []pair
+	maxKeyLen := 0
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) < 2 {
+			continue
+		}
+		k := strings.TrimSpace(parts[0])
+		v := strings.TrimSpace(parts[1])
+
+		if len(k) > maxKeyLen {
+			maxKeyLen = len(k)
+		}
+		pairs = append(pairs, pair{k, v})
+	}
+
+	if len(pairs) == 0 {
+		dialog.ShowInformation("Properties", "No details available", window)
 		return
 	}
 
-	content := container.NewVBox()
-	t := v.Type()
+	var finalLines []string
+	finalLines = append(finalLines, "\n")
+	for _, p := range pairs {
+		paddedKey := fmt.Sprintf("%-*s", maxKeyLen, p.key)
+		finalLines = append(finalLines, fmt.Sprintf(" %s : %s", paddedKey, p.val))
+	}
 
-	for i := 0; i < v.NumField(); i++ {
-		if !t.Field(i).IsExported() {
-			continue
-		}
+	fullText := strings.Join(finalLines, "\n")
 
-		fieldName := t.Field(i).Name
-		fieldValue := fmt.Sprintf("%v", v.Field(i).Interface())
+	grid := widget.NewTextGrid()
+	grid.SetText(fullText)
 
-		label := widget.NewLabel(fieldName)
-		label.TextStyle.Bold = true
+	darkGray := color.NRGBA{R: 100, G: 100, B: 100, A: 255}
+	darkGrayStyle := &widget.CustomTextGridStyle{
+		FGColor: darkGray,
+	}
 
-		value := widget.NewLabel(fieldValue)
-		value.Wrapping = fyne.TextWrapWord
-
-		content.Add(container.New(layout.NewFormLayout(), label, value))
-		if i < v.NumField()-1 {
-			content.Add(widget.NewSeparator())
+	for rowIdx, lineText := range finalLines {
+		for colIdx := range lineText {
+			grid.SetStyleRange(rowIdx, colIdx, rowIdx, colIdx+1, darkGrayStyle)
 		}
 	}
 
-	scroller := container.NewVScroll(content)
+	// 1. Define a smooth, light gray color for the background (Hex: #EBEBEB)
+	bgRect := canvas.NewRectangle(clrBg)
+
+	// 2. Put the background and the text grid into a MaxLayout container
+	// MaxLayout stacks items on top of each other, filling the available area
+	backgroundContainer := container.New(layout.NewMaxLayout(), bgRect, grid)
+
+	// Wrap our customized panel inside the scroller
+	scroller := container.NewVScroll(backgroundContainer)
+
 	d := dialog.NewCustom("Agent Details", "Close", scroller, window)
-	d.Resize(fyne.NewSize(500, 400))
+	d.Resize(fyne.NewSize(600, 275))
 	d.Show()
 }
 
@@ -91,7 +172,6 @@ func buildAgentsContent(spireServer *servers.SpireServer, window fyne.Window) fy
 	titleBlock := container.NewVBox(title, subtitle)
 
 	var list *widget.List
-	selectedAgents := make(map[string]bool)
 
 	refreshData := func() {
 		go func() {
@@ -136,94 +216,64 @@ func buildAgentsContent(spireServer *servers.SpireServer, window fyne.Window) fy
 
 	list = widget.NewList(
 		func() int { return len(spireServer.Agents) },
-		func() fyne.CanvasObject { return newAgentRowWidget() },
+		func() fyne.CanvasObject {
+			return newAgentRowWidget()
+		},
 		func(id widget.ListItemID, o fyne.CanvasObject) {
 			row := o.(*agentRowWidget)
 			agent := spireServer.Agents[id]
 			spiffeID := agent.SPIFFEID
-			row.spiffeIDLbl.SetText(spiffeID)
+			row.spiffeID = spiffeID
+			row.spiffeIDTxt.Text = spiffeID
+			row.spiffeIDTxt.Refresh()
 
-			// To avoid triggering OnChanged when setting to empty
-			row.check.OnChanged = nil
-			row.check.SetChecked(selectedAgents[spiffeID])
-			row.check.OnChanged = func(checked bool) {
-				selectedAgents[spiffeID] = checked
+			row.infoBtn.onTap = func() {
+				go func() {
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					info, err := spireServer.GetAgentInfo(ctx, spiffeID)
+					if err != nil {
+						fyne.Do(func() { dialog.ShowError(err, window) })
+					} else {
+						fyne.Do(func() { showAgentInfo(info, window) })
+					}
+				}()
+			}
+
+			row.evictBtn.onTap = func() {
+				dialog.ShowConfirm("Evict Agent", fmt.Sprintf("Are you sure you want to evict %s?", spiffeID), func(ok bool) {
+					if ok {
+						go func() {
+							ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+							defer cancel()
+							if err := spireServer.EvictAgent(ctx, spiffeID); err != nil {
+								fyne.Do(func() { dialog.ShowError(err, window) })
+							}
+							refreshData()
+						}()
+					}
+				}, window)
+			}
+
+			row.banBtn.onTap = func() {
+				dialog.ShowConfirm("Ban Agent", fmt.Sprintf("Are you sure you want to ban %s?", spiffeID), func(ok bool) {
+					if ok {
+						go func() {
+							ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+							defer cancel()
+							if err := spireServer.BanAgent(ctx, spiffeID); err != nil {
+								fyne.Do(func() { dialog.ShowError(err, window) })
+							}
+							refreshData()
+						}()
+					}
+				}, window)
 			}
 		},
 	)
-
 	list.OnSelected = func(id widget.ListItemID) {
-		spiffeID := spireServer.Agents[id].SPIFFEID
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			details, err := spireServer.AgentDetails(ctx, spiffeID)
-			if err != nil {
-				dialog.ShowError(err, window)
-			} else {
-				showAgentDetails(details, window)
-			}
-		}()
 		list.Unselect(id)
 	}
-
-	banBtn := widget.NewButton("Ban Selected", func() {
-		var toBan []string
-		for id, selected := range selectedAgents {
-			if selected {
-				toBan = append(toBan, id)
-			}
-		}
-		if len(toBan) == 0 {
-			dialog.ShowInformation("No Agents Selected", "Please select one or more agents to ban.", window)
-			return
-		}
-		msg := fmt.Sprintf("Are you sure you want to ban %d agent(s)?", len(toBan))
-		dialog.ShowConfirm("Ban Agents", msg, func(ok bool) {
-			if !ok {
-				return
-			}
-			go func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cancel()
-				for _, agentID := range toBan {
-					_ = spireServer.BanAgent(ctx, agentID)
-					delete(selectedAgents, agentID)
-				}
-				refreshData()
-			}()
-		}, window)
-	})
-
-	evictBtn := widget.NewButton("Evict Selected", func() {
-		var toEvict []string
-		for id, selected := range selectedAgents {
-			if selected {
-				toEvict = append(toEvict, id)
-			}
-		}
-		if len(toEvict) == 0 {
-			dialog.ShowInformation("No Agents Selected", "Please select one or more agents to evict.", window)
-			return
-		}
-		msg := fmt.Sprintf("Are you sure you want to evict %d agent(s)?", len(toEvict))
-		dialog.ShowConfirm("Evict Agents", msg, func(ok bool) {
-			if !ok {
-				return
-			}
-			go func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cancel()
-				for _, agentID := range toEvict {
-					_ = spireServer.EvictAgent(ctx, agentID)
-					delete(selectedAgents, agentID)
-				}
-				refreshData()
-			}()
-		}, window)
-	})
-
-	actionButtons := container.NewHBox(layout.NewSpacer(), evictBtn, banBtn)
 
 	bg := canvas.NewRectangle(clrCard)
 	bg.CornerRadius = 8
@@ -238,7 +288,7 @@ func buildAgentsContent(spireServer *servers.SpireServer, window fyne.Window) fy
 	return container.NewPadded(
 		container.NewBorder(
 			container.NewVBox(topBar, widget.NewSeparator(), gap),
-			actionButtons, nil, nil,
+			nil, nil, nil,
 			container.NewPadded(card),
 		),
 	)

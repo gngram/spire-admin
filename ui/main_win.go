@@ -2,35 +2,38 @@ package ui
 
 import (
 	"fmt"
-	"sync"
 	"image/color"
+	"strings"
+	"sync"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/gngram/spidar/logger"
 	"github.com/gngram/spidar/servers"
-	"github.com/gngram/spidar/config"
 )
 
 // ════════════════════════════════════════════════════════
 //  DATA MODEL
 // ════════════════════════════════════════════════════════
 
-
 type Server struct {
-	ID      int
-	Name    string
-	Server  *servers.SpireServer
-	Status  servers.ServerHealthStatus
-	statusDot *canvas.Circle
-	statusLbl *widget.Label
+	ID         int
+	Name       string
+	Server     *servers.SpireServer
+	Status     servers.ServerHealthStatus
+	Domain     string
+	statusDot  *canvas.Circle
+	statusLbl  *widget.Label
+	domainLbl  *widget.Label
+	lastUpdLbl *widget.Label
 }
 
 // ════════════════════════════════════════════════════════
@@ -41,11 +44,10 @@ type SpireAdminApp struct {
 	fyneApp fyne.App
 	window  fyne.Window
 
-	mu        sync.RWMutex
+	mu           sync.RWMutex
 	parentSocket string
-	servers   []*Server
-	Config    *config.Config
-	nextID    int
+	servers      []*Server
+	nextID       int
 
 	RefreshUI    func()
 	CurrentTheme string
@@ -54,10 +56,9 @@ type SpireAdminApp struct {
 
 func NewSpireAdminApp(parentSocket string) *SpireAdminApp {
 	return &SpireAdminApp{
-		Config:    config.NewConfig(),
 		parentSocket: parentSocket,
-		servers:   make([]*Server, 0),
-		nextID:    1,
+		servers:      make([]*Server, 0),
+		nextID:       1,
 		CurrentTheme: "Purple",
 		CurrentView:  "Servers",
 	}
@@ -77,9 +78,10 @@ func (a *SpireAdminApp) AddServer(name, host, port string) (*Server, error) {
 	}
 
 	srv := &Server{
-		ID:      a.nextID,
-		Name:    name,
-		Server:  spireServer,
+		ID:     a.nextID,
+		Name:   name,
+		Server: spireServer,
+		Domain: spireServer.Domain,
 	}
 	a.nextID++
 	a.servers = append(a.servers, srv)
@@ -88,11 +90,6 @@ func (a *SpireAdminApp) AddServer(name, host, port string) (*Server, error) {
 	spireServer.OnHealthChange = func(status servers.ServerHealthStatus) {
 		a.UpdateStatus(srv.ID, status)
 	}
-	a.Config.AddServer(config.ServerConfig{
-		Nickname: name,
-		Address:  host,
-		Port:     port,
-	})
 
 	return srv, nil
 }
@@ -103,19 +100,28 @@ func (a *SpireAdminApp) AddServer(name, host, port string) (*Server, error) {
 func (a *SpireAdminApp) UpdateStatus(id int, status servers.ServerHealthStatus) {
 	var dot *canvas.Circle
 	var lbl *widget.Label
+	var dLbl *widget.Label
+	var luLbl *widget.Label
+	var domain string
+	var lastUpdated string
 
 	a.mu.Lock()
 	for _, s := range a.servers {
 		if s.ID == id {
 			s.Status = status
+			s.Domain = s.Server.Domain
 			dot = s.statusDot
 			lbl = s.statusLbl
+			dLbl = s.domainLbl
+			luLbl = s.lastUpdLbl
+			domain = s.Domain
+			lastUpdated = s.Server.GetLastUpdated().Format("15:04:05")
 			break
 		}
 	}
 	a.mu.Unlock()
 
-	if dot != nil || lbl != nil {
+	if dot != nil || lbl != nil || dLbl != nil || luLbl != nil {
 		fyne.Do(func() {
 			if dot != nil {
 				dot.FillColor = statusColor(status)
@@ -123,6 +129,12 @@ func (a *SpireAdminApp) UpdateStatus(id int, status servers.ServerHealthStatus) 
 			}
 			if lbl != nil {
 				lbl.SetText(statusString(status))
+			}
+			if dLbl != nil {
+				dLbl.SetText(domain)
+			}
+			if luLbl != nil {
+				luLbl.SetText(lastUpdated)
 			}
 		})
 	}
@@ -155,58 +167,6 @@ func (a *SpireAdminApp) Snapshot() []*Server {
 	return snap
 }
 
-// ════════════════════════════════════════════════════════
-//  CUSTOM THEME
-// ════════════════════════════════════════════════════════
-
-var (
-	clrPurple  = color.NRGBA{R: 86, G: 61, B: 124, A: 255}
-	clrSidebar = color.NRGBA{R: 72, G: 52, B: 110, A: 255}
-	clrAccent  = color.NRGBA{R: 130, G: 100, B: 200, A: 255}
-	clrBg      = color.NRGBA{R: 237, G: 234, B: 248, A: 255}
-	clrCard    = color.NRGBA{R: 248, G: 246, B: 255, A: 255}
-	clrBorder  = color.NRGBA{R: 210, G: 205, B: 235, A: 255}
-	clrGreen   = color.NRGBA{R: 34, G: 197, B: 94, A: 255}
-	clrYellow  = color.NRGBA{R: 234, G: 179, B: 8, A: 255}
-	clrRed     = color.NRGBA{R: 239, G: 68, B: 68, A: 255}
-	clrText    = color.NRGBA{R: 30, G: 20, B: 60, A: 255}
-	clrMuted   = color.NRGBA{R: 120, G: 100, B: 160, A: 255}
-)
-
-type spireTheme struct{}
-
-func (spireTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {
-	switch n {
-	case theme.ColorNameBackground:
-		return clrBg
-	case theme.ColorNameForeground:
-		return clrText
-	case theme.ColorNamePrimary:
-		return clrPurple
-	case theme.ColorNameButton:
-		return clrCard
-	case theme.ColorNameInputBackground:
-		return clrCard
-	case theme.ColorNameShadow:
-		return color.NRGBA{R: 86, G: 61, B: 124, A: 30}
-	}
-	return theme.DefaultTheme().Color(n, v)
-}
-func (spireTheme) Font(s fyne.TextStyle) fyne.Resource     { return theme.DefaultTheme().Font(s) }
-func (spireTheme) Icon(n fyne.ThemeIconName) fyne.Resource  { return theme.DefaultTheme().Icon(n) }
-func (spireTheme) Size(n fyne.ThemeSizeName) float32        { return theme.DefaultTheme().Size(n) }
-
-func statusColor(s servers.ServerHealthStatus) color.Color {
-	switch s {
-	case servers.Online:
-		return clrGreen
-	case servers.Connecting:
-		return clrYellow
-	default:
-		return clrRed
-	}
-}
-
 func statusString(s servers.ServerHealthStatus) string {
 	switch s {
 	case servers.Online:
@@ -222,6 +182,106 @@ func statusString(s servers.ServerHealthStatus) string {
 //  UI COMPONENTS
 // ════════════════════════════════════════════════════════
 
+type clickableStack struct {
+	widget.BaseWidget
+	content    fyne.CanvasObject
+	onTap      func()
+	onHoverIn  func()
+	onHoverOut func()
+}
+
+func newClickableStack(content fyne.CanvasObject, onTap func()) *clickableStack {
+	c := &clickableStack{content: content, onTap: onTap}
+	c.ExtendBaseWidget(c)
+	return c
+}
+
+func (c *clickableStack) CreateRenderer() fyne.WidgetRenderer {
+	return widget.NewSimpleRenderer(c.content)
+}
+
+func (c *clickableStack) Tapped(_ *fyne.PointEvent) {
+	if c.onTap != nil {
+		c.onTap()
+	}
+}
+
+func (c *clickableStack) TappedSecondary(_ *fyne.PointEvent) {}
+
+func (c *clickableStack) MouseIn(_ *desktop.MouseEvent) {
+	if c.onHoverIn != nil {
+		c.onHoverIn()
+	}
+}
+
+func (c *clickableStack) MouseOut() {
+	if c.onHoverOut != nil {
+		c.onHoverOut()
+	}
+}
+
+func (c *clickableStack) MouseMoved(_ *desktop.MouseEvent) {}
+
+func showServerInfo(srv *Server, window fyne.Window) {
+	details := fmt.Sprintf("Name : %s\nAddress : %s\nPort : %s\nDomain : %s\nStatus : %s",
+		srv.Name, srv.Server.Address, srv.Server.Port, srv.Server.Domain, statusString(srv.Server.HealthStatus))
+
+	lines := strings.Split(details, "\n")
+
+	type pair struct{ key, val string }
+	var pairs []pair
+	maxKeyLen := 0
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) < 2 {
+			continue
+		}
+		k := strings.TrimSpace(parts[0])
+		v := strings.TrimSpace(parts[1])
+
+		if len(k) > maxKeyLen {
+			maxKeyLen = len(k)
+		}
+		pairs = append(pairs, pair{k, v})
+	}
+
+	var finalLines []string
+	finalLines = append(finalLines, "\n")
+	for _, p := range pairs {
+		paddedKey := fmt.Sprintf("%-*s", maxKeyLen, p.key)
+		finalLines = append(finalLines, fmt.Sprintf(" %s : %s", paddedKey, p.val))
+	}
+
+	fullText := strings.Join(finalLines, "\n")
+
+	grid := widget.NewTextGrid()
+	grid.SetText(fullText)
+
+	darkGray := color.NRGBA{R: 100, G: 100, B: 100, A: 255}
+	darkGrayStyle := &widget.CustomTextGridStyle{
+		FGColor: darkGray,
+	}
+
+	for rowIdx, lineText := range finalLines {
+		for colIdx := range lineText {
+			grid.SetStyleRange(rowIdx, colIdx, rowIdx, colIdx+1, darkGrayStyle)
+		}
+	}
+
+	bgRect := canvas.NewRectangle(clrBg)
+	backgroundContainer := container.New(layout.NewMaxLayout(), bgRect, grid)
+	scroller := container.NewVScroll(backgroundContainer)
+
+	d := dialog.NewCustom("Server Details", "Close", scroller, window)
+	d.Resize(fyne.NewSize(400, 250))
+	d.Show()
+}
+
 func (a *SpireAdminApp) buildServerRow(srv *Server, refresh func()) fyne.CanvasObject {
 	// ── Server icon chip ──────────────────────────────────
 	iconBg := canvas.NewRectangle(clrAccent)
@@ -229,18 +289,32 @@ func (a *SpireAdminApp) buildServerRow(srv *Server, refresh func()) fyne.CanvasO
 	iconLbl := canvas.NewText("≡", color.White)
 	iconLbl.TextSize = 16
 	iconLbl.TextStyle = fyne.TextStyle{Bold: true}
-	iconChip := container.NewStack(
+	iconChip := newClickableStack(container.NewStack(
 		container.New(layout.NewGridWrapLayout(fyne.NewSize(32, 32)), iconBg),
 		container.NewCenter(iconLbl),
-	)
+	), func() {
+		ShowServerWindow(srv.Server)
+	})
+
+	iconChip.onHoverIn = func() {
+		iconBg.FillColor = clrPurple
+		iconBg.Refresh()
+	}
+	iconChip.onHoverOut = func() {
+		iconBg.FillColor = clrAccent
+		iconBg.Refresh()
+	}
 
 	// ── Name ─────────────────────────────────────────────
 	nameLbl := widget.NewLabel(srv.Name)
 	nameLbl.TextStyle = fyne.TextStyle{Bold: true}
-	nameCol := container.NewHBox(iconChip, nameLbl)
+	nameClickable := newClickableStack(nameLbl, func() {
+		showServerInfo(srv, a.window)
+	})
+	nameCol := container.NewHBox(iconChip, nameClickable)
 
 	// ── Domain ──────────────────────────────────────────
-	domainLbl := widget.NewLabel(srv.Server.Domain)
+	domainLbl := widget.NewLabel(srv.Domain)
 
 	// ── Status indicator ─────────────────────────────────
 	dot := canvas.NewCircle(statusColor(srv.Status))
@@ -249,22 +323,30 @@ func (a *SpireAdminApp) buildServerRow(srv *Server, refresh func()) fyne.CanvasO
 	statusLbl.TextStyle = fyne.TextStyle{Bold: true}
 	statusCol := container.NewHBox(dotWrap, statusLbl)
 
+	// ── Last Updates ─────────────────────────────────────
+	lastUpdatedStr := srv.Server.GetLastUpdated().Format("15:04:05")
+	lastUpdLbl := widget.NewLabel(lastUpdatedStr)
+
+	refreshBtn := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
+		go func() {
+			srv.Server.FetchInfo()
+			a.UpdateStatus(srv.ID, srv.Server.GetCachedHealthStatus())
+		}()
+	})
+	refreshBtn.Importance = widget.LowImportance
+
 	// Cache UI element references in the original server struct for in-place updates
 	a.mu.Lock()
 	for _, originalSrv := range a.servers {
 		if originalSrv.ID == srv.ID {
 			originalSrv.statusDot = dot
 			originalSrv.statusLbl = statusLbl
+			originalSrv.domainLbl = domainLbl
+			originalSrv.lastUpdLbl = lastUpdLbl
 			break
 		}
 	}
 	a.mu.Unlock()
-
-	// ── Action buttons ───────────────────────────────────
-	openBtn := widget.NewButtonWithIcon("", theme.NavigateNextIcon(), func() {
-		ShowServerWindow(srv.Server)
-	})
-	openBtn.Importance = widget.LowImportance
 
 	delBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 		dialog.ShowConfirm(
@@ -281,7 +363,7 @@ func (a *SpireAdminApp) buildServerRow(srv *Server, refresh func()) fyne.CanvasO
 	})
 	delBtn.Importance = widget.LowImportance
 
-	actions := container.NewHBox(openBtn, delBtn)
+	actions := container.NewHBox(lastUpdLbl, refreshBtn, delBtn)
 
 	row := container.New(
 		layout.NewGridLayoutWithColumns(4),
@@ -312,7 +394,7 @@ func (a *SpireAdminApp) buildTable(refresh func()) fyne.CanvasObject {
 		makeHdr("Name:"),
 		makeHdr("Domain:"),
 		makeHdr("Status:"),
-		makeHdr("Actions:"),
+		makeHdr("Last Updates:"),
 	))
 
 	rows := container.NewVBox()
@@ -347,17 +429,26 @@ func (a *SpireAdminApp) showAddServerDialog(refresh func()) {
 	}
 
 	d := dialog.NewForm("Server", "Add", "Cancel", items, func(ok bool) {
-		inputErr := fmt.Errorf("Invalid input!")
-		if !ok || nameEntry.Text == "" || addrEntry.Text == "" {
-			
-			dialog.ShowError(inputErr, a.window)
+		if !ok {
+			return
+		}
+		if nameEntry.Text == "" || addrEntry.Text == "" {
+			dialog.ShowError(fmt.Errorf("Invalid input!"), a.window)
 			return
 		}
 		addr := addrEntry.Text
 		port := portEntry.Text
+
+		for _, srv := range a.Snapshot() {
+			if srv.Server.Address == addr && srv.Server.Port == port {
+				dialog.ShowError(fmt.Errorf("Server %s:%s already exists", addr, port), a.window)
+				return
+			}
+		}
+
 		_, err := a.AddServer(nameEntry.Text, addr, port)
 		if err != nil {
-			dialog.ShowError(inputErr, a.window)
+			dialog.ShowError(err, a.window)
 			return
 		}
 		refresh()
@@ -426,7 +517,7 @@ func (a *SpireAdminApp) buildContent(refresh func()) fyne.CanvasObject {
 		return a.buildLogsContent()
 	}
 
-	servers := a.Snapshot()
+	serverList := a.Snapshot()
 
 	// ── Header ───────────────────────────────────────────
 	title := canvas.NewText("Servers", clrText)
@@ -442,10 +533,69 @@ func (a *SpireAdminApp) buildContent(refresh func()) fyne.CanvasObject {
 	addBtn.Importance = widget.HighImportance
 
 	loadBtn := widget.NewButtonWithIcon("Load", theme.FolderOpenIcon(), func() {
-		dialog.ShowInformation("Load Configuations", "Config loading is not implemented in this demo.", a.window)
+		fd := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
+			if err != nil {
+				dialog.ShowError(err, a.window)
+				return
+			}
+			if reader == nil {
+				return
+			}
+			defer reader.Close()
+
+			cfg, err := servers.LoadServersConfig(reader.URI().Path())
+			if err != nil {
+				dialog.ShowError(err, a.window)
+				return
+			}
+			if cfg != nil {
+				for _, sc := range cfg.Servers {
+					exists := false
+					for _, srv := range a.Snapshot() {
+						if srv.Server.Address == sc.Address && srv.Server.Port == sc.Port {
+							exists = true
+							break
+						}
+					}
+					if exists {
+						dialog.ShowError(fmt.Errorf("Server %s:%s already exists", sc.Address, sc.Port), a.window)
+						continue
+					}
+					if _, err := a.AddServer(sc.Nickname, sc.Address, sc.Port); err != nil {
+						dialog.ShowError(fmt.Errorf("Failed to add %s:%s: %v", sc.Address, sc.Port, err), a.window)
+					}
+				}
+				refresh()
+			}
+		}, a.window)
+		fd.Resize(fyne.NewSize(700, 500))
+		fd.Show()
+		fd.SetView(dialog.ListView)
 	})
 	saveBtn := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
-		dialog.ShowInformation("Save Configuations", "Configuration saved (demo).", a.window)
+		fd := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
+			if err != nil {
+				dialog.ShowError(err, a.window)
+				return
+			}
+			if writer == nil {
+				return
+			}
+			defer writer.Close()
+
+			serverMap := make(map[string]*servers.SpireServer)
+			for _, s := range a.Snapshot() {
+				serverMap[s.Name] = s.Server
+			}
+			if err := servers.SaveServersConfig(writer.URI().Path(), serverMap); err != nil {
+				dialog.ShowError(err, a.window)
+			} else {
+				dialog.ShowInformation("Save Configurations", "Configuration successfully saved.", a.window)
+			}
+		}, a.window)
+		fd.Resize(fyne.NewSize(700, 500))
+		fd.Show()
+		fd.SetView(dialog.ListView)
 	})
 
 	topBar := container.NewBorder(nil, nil,
@@ -460,7 +610,7 @@ func (a *SpireAdminApp) buildContent(refresh func()) fyne.CanvasObject {
 	gap.SetMinSize(fyne.NewSize(0, 20))
 
 	// ── Footer ───────────────────────────────────────────
-	footerLbl := widget.NewLabel(fmt.Sprintf("Total Servers: %d", len(servers)))
+	footerLbl := widget.NewLabel(fmt.Sprintf("Total Servers: %d", len(serverList)))
 
 	return container.NewPadded(
 		container.NewBorder(
@@ -478,7 +628,7 @@ func (a *SpireAdminApp) buildContent(refresh func()) fyne.CanvasObject {
 
 func OpenDashboard(parentSocket string) {
 	adm := NewSpireAdminApp(parentSocket)
-	adm.fyneApp = app.New()
+	adm.fyneApp = app.NewWithID("com.github.gngram.spidar")
 	adm.fyneApp.Settings().SetTheme(&spireTheme{})
 
 	adm.fyneApp.Lifecycle().SetOnStopped(func() {
@@ -491,11 +641,11 @@ func OpenDashboard(parentSocket string) {
 	adm.window.Resize(fyne.NewSize(1020, 700))
 
 	// Seed with demo data
-	//adm.AddServer("Production Server", "spire-prod.example.com", "8081")
-	//adm.AddServer("Staging Server", "spire-staging.example.com", "8081")
-	//adm.AddServer("Development Server", "spire-dev.example.com", "8081")
-	//adm.AddServer("Test Server", "spire-test.example.com", "8081")
-	//adm.AddServer("Local Server", "localhost", "8081")
+	// adm.AddServer("Production Server", "spire-prod.example.com", "8081")
+	// adm.AddServer("Staging Server", "spire-staging.example.com", "8081")
+	// adm.AddServer("Development Server", "spire-dev.example.com", "8081")
+	// adm.AddServer("Test Server", "spire-test.example.com", "8081")
+	// adm.AddServer("Local Server", "localhost", "8081")
 
 	var buildUI func()
 	buildUI = func() {
