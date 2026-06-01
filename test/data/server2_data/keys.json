@@ -1,6 +1,0 @@
-{
-	"keys": {
-		"JWT-Signer-A": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgwjkJ9MImZVxqFPBm6bsHcWn5yJ3UkavtZEg1/cgdoz2hRANCAARWldkgnqosi5r/RcwORl3EywnmeWoR+ry9UqUGcAtA7RYy3zu5vydGBeIzcylhQqdHppTq+CO+R1IaytoI0Apw",
-		"x509-CA-A": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgaSv80qbnepFAlosrNIaWXPrkLrmkr0dS2NGNUAKr9iehRANCAARgNhqErRHekV91u+xyNaDxTXoVh9LA72tlKE7IfwUYoFFrIRcjcuOn6e/qBU+662QRWBB8CjqrdreMmqbJV+/s"
-	}
-}
