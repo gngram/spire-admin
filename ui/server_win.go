@@ -13,10 +13,10 @@ import (
 	"github.com/gngram/spire_admin/servers"
 )
 
-func ShowServerWindow(spireServer *servers.SpireServer, width uint16, height uint16) {
+func ShowServerWindow(spireServer *servers.SpireServer, name string, width uint16, height uint16) {
 	title := "Server Details"
 	if spireServer != nil {
-		title = "Server: " + spireServer.Address
+		title = "Server: " + name
 	}
 	aw := fyne.CurrentApp().NewWindow(title)
 	aw.Resize(fyne.NewSize(float32(width), float32(height)))
@@ -31,23 +31,10 @@ func ShowServerWindow(spireServer *servers.SpireServer, width uint16, height uin
 
 	agentPane := buildAgentsContent(spireServer, aw)
 	entriesPane := buildEntriesContent(spireServer, aw)
-
-	bundleList := widget.NewList(
-		func() int { return len(spireServer.Bundles) },
-		func() fyne.CanvasObject { return widget.NewLabel("") },
-		func(id widget.ListItemID, o fyne.CanvasObject) {
-			o.(*widget.Label).SetText(spireServer.Bundles[id].TrustDomain)
-		},
-	)
-
-	fedList := widget.NewList(
-		func() int { return len(spireServer.FederatedServers) },
-		func() fyne.CanvasObject { return widget.NewLabel("") },
-		func(id widget.ListItemID, o fyne.CanvasObject) {
-			fed := spireServer.FederatedServers[id]
-			o.(*widget.Label).SetText(fed.TrustDomain + " (" + fed.Address + ")")
-		},
-	)
+	bundlePane := buildBundlesContent(spireServer, aw)
+	federationPane := buildFederationContent(spireServer, aw)
+	localAuthorityPane := buildLocalAuthorityContent(spireServer, aw)
+	upstreamAuthorityPane := buildUpstreamAuthorityContent(spireServer, aw)
 
 	contentContainer := container.NewStack(agentPane)
 
@@ -88,9 +75,11 @@ func ShowServerWindow(spireServer *servers.SpireServer, width uint16, height uin
 		logoRow,
 		widget.NewSeparator(),
 		makeNavItem(theme.AccountIcon(), "Registered Agents", agentPane, 0),
-		makeNavItem(theme.FolderIcon(), "Trust Bundles", bundleList, 1),
-		makeNavItem(theme.StorageIcon(), "Dynamic Federation", fedList, 2),
+		makeNavItem(theme.FolderIcon(), "Trust Bundles", bundlePane, 1),
+		makeNavItem(theme.StorageIcon(), "Federations", federationPane, 2),
 		makeNavItem(theme.DocumentIcon(), "Registered Entries", entriesPane, 3),
+		makeNavItem(theme.DocumentIcon(), "Local Authority: x509", localAuthorityPane, 4),
+		makeNavItem(theme.DocumentIcon(), "Upstream Authority", upstreamAuthorityPane, 5),
 	)
 
 	sidebar := container.NewStack(bg, container.NewBorder(nav, nil, nil, nil))

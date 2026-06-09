@@ -261,25 +261,14 @@ func showServerInfo(srv *Server, window fyne.Window) {
 
 	fullText := strings.Join(finalLines, "\n")
 
-	grid := widget.NewTextGrid()
-	grid.SetText(fullText)
-
-	darkGray := color.NRGBA{R: 100, G: 100, B: 100, A: 255}
-	darkGrayStyle := &widget.CustomTextGridStyle{
-		FGColor: darkGray,
-	}
-
-	for rowIdx, lineText := range finalLines {
-		for colIdx := range lineText {
-			grid.SetStyleRange(rowIdx, colIdx, rowIdx, colIdx+1, darkGrayStyle)
-		}
-	}
+	entry := widget.NewMultiLineEntry()
+	entry.SetText(fullText)
+	entry.Disable()
 
 	bgRect := canvas.NewRectangle(clrBg)
-	backgroundContainer := container.New(layout.NewMaxLayout(), bgRect, grid)
-	scroller := container.NewVScroll(backgroundContainer)
+	backgroundContainer := container.New(layout.NewMaxLayout(), bgRect, entry)
 
-	d := dialog.NewCustom("Server Details", "Close", scroller, window)
+	d := dialog.NewCustom("Server Details", "Close", backgroundContainer, window)
 	d.Resize(fyne.NewSize(400, 250))
 	d.Show()
 }
@@ -295,7 +284,7 @@ func (a *SpireAdminApp) buildServerRow(srv *Server, refresh func()) fyne.CanvasO
 		container.New(layout.NewGridWrapLayout(fyne.NewSize(32, 32)), iconBg),
 		container.NewCenter(iconLbl),
 	), func() {
-		ShowServerWindow(srv.Server, a.windowWidth, a.windowHeight)
+		ShowServerWindow(srv.Server, srv.Name, a.windowWidth, a.windowHeight)
 	})
 
 	iconChip.onHoverIn = func() {

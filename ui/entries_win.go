@@ -12,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -40,9 +41,11 @@ func leftAlignedFormItem(text string, input fyne.CanvasObject) *widget.FormItem 
 type entryRowWidget struct {
 	widget.BaseWidget
 	spiffeIDLbl *widget.Label
+	infoBtn     *clickableStack
+	updateBtn   *clickableStack
+	deleteBtn   *clickableStack
 	container   *fyne.Container
 	entryID     string
-	onTapped    func(pe *fyne.PointEvent, entryID string)
 }
 
 func newEntryRowWidget() *entryRowWidget {
@@ -51,19 +54,50 @@ func newEntryRowWidget() *entryRowWidget {
 	}
 	r.spiffeIDLbl.Truncation = fyne.TextTruncateEllipsis
 
-	r.container = container.NewBorder(nil, nil, nil, nil, r.spiffeIDLbl)
+	tooltipTxt := canvas.NewText("", clrMuted)
+	tooltipTxt.TextSize = 12
+	tooltipTxt.Alignment = fyne.TextAlignTrailing
+	tooltipTxt.TextStyle = fyne.TextStyle{Italic: true}
+	tooltipWrapper := container.New(layout.NewGridWrapLayout(fyne.NewSize(45, 32)), container.NewCenter(tooltipTxt))
+
+	makeBtn := func(icon fyne.Resource, tooltip string) *clickableStack {
+		bg := canvas.NewRectangle(clrBg)
+		bg.CornerRadius = 6
+		ic := widget.NewIcon(icon)
+
+		btn := newClickableStack(container.NewStack(
+			container.New(layout.NewGridWrapLayout(fyne.NewSize(32, 32)), bg),
+			container.NewCenter(ic),
+		), nil)
+
+		btn.onHoverIn = func() {
+			bg.FillColor = clrBorder
+			bg.Refresh()
+			tooltipTxt.Text = tooltip
+			tooltipTxt.Refresh()
+		}
+		btn.onHoverOut = func() {
+			bg.FillColor = clrBg
+			bg.Refresh()
+			tooltipTxt.Text = ""
+			tooltipTxt.Refresh()
+		}
+		return btn
+	}
+
+	r.infoBtn = makeBtn(theme.InfoIcon(), "Info")
+	r.updateBtn = makeBtn(theme.MailComposeIcon(), "Update")
+	r.deleteBtn = makeBtn(theme.DeleteIcon(), "Delete")
+
+	actionGroup := container.NewHBox(tooltipWrapper, r.infoBtn, r.updateBtn, r.deleteBtn)
+
+	r.container = container.NewBorder(nil, nil, nil, actionGroup, r.spiffeIDLbl)
 	r.ExtendBaseWidget(r)
 	return r
 }
 
 func (r *entryRowWidget) CreateRenderer() fyne.WidgetRenderer {
 	return widget.NewSimpleRenderer(r.container)
-}
-
-func (r *entryRowWidget) Tapped(pe *fyne.PointEvent) {
-	if r.onTapped != nil && r.entryID != "" {
-		r.onTapped(pe, r.entryID)
-	}
 }
 
 func buildEntriesContent(spireServer *servers.SpireServer, window fyne.Window) fyne.CanvasObject {
@@ -129,44 +163,34 @@ func buildEntriesContent(spireServer *servers.SpireServer, window fyne.Window) f
 		l := widget.NewList(
 			func() int { return len(*entries) },
 			func() fyne.CanvasObject {
-				row := newEntryRowWidget()
-				row.onTapped = func(pe *fyne.PointEvent, entryID string) {
-					var p *widget.PopUp
-
-					btnInfo := widget.NewButton("Info", func() {
-						p.Hide()
-						showEntryInfo(spireServer, entryID, window)
-					})
-					btnUpdate := widget.NewButton("Update", func() {
-						p.Hide()
-						showUpdateEntryDialog(spireServer, entryID, window, refreshData)
-					})
-					btnDelete := widget.NewButton("Delete", func() {
-						p.Hide()
-						dialog.ShowConfirm("Delete Entry", fmt.Sprintf("Are you sure you want to delete entry %s?", entryID), func(ok bool) {
-							if ok {
-								go func() {
-									ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-									defer cancel()
-									if err := spireServer.DeleteEntry(ctx, entryID); err != nil {
-										fyne.Do(func() { dialog.ShowError(err, window) })
-									}
-									refreshData()
-								}()
-							}
-						}, window)
-					})
-
-					p = widget.NewPopUp(container.NewVBox(btnInfo, btnUpdate, btnDelete), window.Canvas())
-					p.ShowAtPosition(pe.AbsolutePosition)
-				}
-				return row
+				return newEntryRowWidget()
 			},
 			func(id widget.ListItemID, o fyne.CanvasObject) {
 				row := o.(*entryRowWidget)
 				e := (*entries)[id]
 				row.entryID = e.ID
 				row.spiffeIDLbl.SetText(e.SPIFFEID)
+
+				row.infoBtn.onTap = func() {
+					showEntryInfo(spireServer, row.entryID, window)
+				}
+				row.updateBtn.onTap = func() {
+					showUpdateEntryDialog(spireServer, row.entryID, window, refreshData)
+				}
+				row.deleteBtn.onTap = func() {
+					dialog.ShowConfirm("Delete Entry", fmt.Sprintf("Are you sure you want to delete entry %s?", row.entryID), func(ok bool) {
+						if ok {
+							go func() {
+								ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+								defer cancel()
+								if err := spireServer.DeleteEntry(ctx, row.entryID); err != nil {
+									fyne.Do(func() { dialog.ShowError(err, window) })
+								}
+								refreshData()
+							}()
+						}
+					}, window)
+				}
 			},
 		)
 		return l
@@ -284,25 +308,14 @@ func showEntryInfo(spireServer *servers.SpireServer, entryID string, window fyne
 			}
 
 			fullText := strings.Join(finalLines, "\n")
-			grid := widget.NewTextGrid()
-			grid.SetText(fullText)
-
-			darkGray := color.NRGBA{R: 100, G: 100, B: 100, A: 255}
-			darkGrayStyle := &widget.CustomTextGridStyle{
-				FGColor: darkGray,
-			}
-
-			for rowIdx, lineText := range finalLines {
-				for colIdx := range lineText {
-					grid.SetStyleRange(rowIdx, colIdx, rowIdx, colIdx+1, darkGrayStyle)
-				}
-			}
+			entry := widget.NewMultiLineEntry()
+			entry.SetText(fullText)
+			entry.Disable()
 
 			bgRect := canvas.NewRectangle(clrBg)
-			backgroundContainer := container.NewStack(bgRect, grid)
-			scroller := container.NewVScroll(backgroundContainer)
+			backgroundContainer := container.NewStack(bgRect, entry)
 
-			d := dialog.NewCustom("Entry Details", "Close", scroller, window)
+			d := dialog.NewCustom("Entry Details", "Close", backgroundContainer, window)
 			d.Resize(fyne.NewSize(600, 300))
 			d.Show()
 		})

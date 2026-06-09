@@ -20,7 +20,7 @@ var (
 	clrYellow  = color.NRGBA{R: 234, G: 179, B: 8, A: 255}
 	clrRed     = color.NRGBA{R: 239, G: 68, B: 68, A: 255}
 	clrText    = color.NRGBA{R: 30, G: 20, B: 60, A: 255}
-	clrMuted   = color.NRGBA{R: 120, G: 100, B: 160, A: 255}
+	clrMuted   = color.NRGBA{R: 90, G: 70, B: 130, A: 255}
 )
 
 func SetThemeColors(name string) {
@@ -33,7 +33,7 @@ func SetThemeColors(name string) {
 		clrCard = color.NRGBA{R: 246, G: 255, B: 246, A: 255}
 		clrBorder = color.NRGBA{R: 205, G: 235, B: 205, A: 255}
 		clrText = color.NRGBA{R: 20, G: 60, B: 20, A: 255}
-		clrMuted = color.NRGBA{R: 100, G: 160, B: 100, A: 255}
+		clrMuted = color.NRGBA{R: 60, G: 120, B: 60, A: 255}
 	case "Blue":
 		clrPurple = color.NRGBA{R: 61, G: 86, B: 124, A: 255}
 		clrSidebar = color.NRGBA{R: 52, G: 72, B: 110, A: 255}
@@ -42,7 +42,7 @@ func SetThemeColors(name string) {
 		clrCard = color.NRGBA{R: 246, G: 248, B: 255, A: 255}
 		clrBorder = color.NRGBA{R: 205, G: 210, B: 235, A: 255}
 		clrText = color.NRGBA{R: 20, G: 30, B: 60, A: 255}
-		clrMuted = color.NRGBA{R: 100, G: 120, B: 160, A: 255}
+		clrMuted = color.NRGBA{R: 60, G: 80, B: 120, A: 255}
 	case "Gray":
 		clrPurple = color.NRGBA{R: 80, G: 80, B: 80, A: 255}
 		clrSidebar = color.NRGBA{R: 60, G: 60, B: 60, A: 255}
@@ -51,7 +51,7 @@ func SetThemeColors(name string) {
 		clrCard = color.NRGBA{R: 250, G: 250, B: 250, A: 255}
 		clrBorder = color.NRGBA{R: 215, G: 215, B: 215, A: 255}
 		clrText = color.NRGBA{R: 40, G: 40, B: 40, A: 255}
-		clrMuted = color.NRGBA{R: 140, G: 140, B: 140, A: 255}
+		clrMuted = color.NRGBA{R: 100, G: 100, B: 100, A: 255}
 	default: // Purple
 		clrPurple = color.NRGBA{R: 86, G: 61, B: 124, A: 255}
 		clrSidebar = color.NRGBA{R: 72, G: 52, B: 110, A: 255}
@@ -60,7 +60,7 @@ func SetThemeColors(name string) {
 		clrCard = color.NRGBA{R: 248, G: 246, B: 255, A: 255}
 		clrBorder = color.NRGBA{R: 210, G: 205, B: 235, A: 255}
 		clrText = color.NRGBA{R: 30, G: 20, B: 60, A: 255}
-		clrMuted = color.NRGBA{R: 120, G: 100, B: 160, A: 255}
+		clrMuted = color.NRGBA{R: 90, G: 70, B: 130, A: 255}
 	}
 }
 
@@ -72,6 +72,8 @@ func (spireTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color 
 		return clrBg
 	case theme.ColorNameForeground:
 		return clrText
+	case theme.ColorNameDisabled:
+		return clrMuted
 	case theme.ColorNamePrimary:
 		return clrPurple
 	case theme.ColorNameButton:

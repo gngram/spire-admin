@@ -34,7 +34,13 @@ func newAgentRowWidget() *agentRowWidget {
 	}
 	r.spiffeIDTxt.Alignment = fyne.TextAlignLeading
 
-	makeBtn := func(icon fyne.Resource) *clickableStack {
+	tooltipTxt := canvas.NewText("", clrMuted)
+	tooltipTxt.TextSize = 12
+	tooltipTxt.Alignment = fyne.TextAlignTrailing
+	tooltipTxt.TextStyle = fyne.TextStyle{Italic: true}
+	tooltipWrapper := container.New(layout.NewGridWrapLayout(fyne.NewSize(45, 32)), container.NewCenter(tooltipTxt))
+
+	makeBtn := func(icon fyne.Resource, tooltip string) *clickableStack {
 		bg := canvas.NewRectangle(clrBg)
 		bg.CornerRadius = 6
 		ic := widget.NewIcon(icon)
@@ -47,19 +53,23 @@ func newAgentRowWidget() *agentRowWidget {
 		btn.onHoverIn = func() {
 			bg.FillColor = clrBorder
 			bg.Refresh()
+			tooltipTxt.Text = tooltip
+			tooltipTxt.Refresh()
 		}
 		btn.onHoverOut = func() {
 			bg.FillColor = clrBg
 			bg.Refresh()
+			tooltipTxt.Text = ""
+			tooltipTxt.Refresh()
 		}
 		return btn
 	}
 
-	r.infoBtn = makeBtn(theme.InfoIcon())
-	r.evictBtn = makeBtn(theme.DeleteIcon())
-	r.banBtn = makeBtn(theme.MediaStopIcon())
+	r.infoBtn = makeBtn(theme.InfoIcon(), "Info")
+	r.evictBtn = makeBtn(theme.DeleteIcon(), "Evict")
+	r.banBtn = makeBtn(theme.MediaStopIcon(), "Ban")
 
-	actionGroup := container.NewHBox(r.infoBtn, r.evictBtn, r.banBtn)
+	actionGroup := container.NewHBox(tooltipWrapper, r.infoBtn, r.evictBtn, r.banBtn)
 
 	content := container.NewBorder(nil, nil, nil, actionGroup, r.spiffeIDTxt)
 	rowBg := canvas.NewRectangle(clrCard)
@@ -126,7 +136,7 @@ func showAgentInfo(details string, window fyne.Window) {
 	}
 
 	var finalLines []string
-	finalLines = append(finalLines, "\n")
+	//finalLines = append(finalLines, "\n")
 	for _, p := range pairs {
 		paddedKey := fmt.Sprintf("%-*s", maxKeyLen, p.key)
 		finalLines = append(finalLines, fmt.Sprintf(" %s : %s", paddedKey, p.val))
@@ -134,31 +144,16 @@ func showAgentInfo(details string, window fyne.Window) {
 
 	fullText := strings.Join(finalLines, "\n")
 
-	grid := widget.NewTextGrid()
-	grid.SetText(fullText)
-
-	darkGray := color.NRGBA{R: 100, G: 100, B: 100, A: 255}
-	darkGrayStyle := &widget.CustomTextGridStyle{
-		FGColor: darkGray,
-	}
-
-	for rowIdx, lineText := range finalLines {
-		for colIdx := range lineText {
-			grid.SetStyleRange(rowIdx, colIdx, rowIdx, colIdx+1, darkGrayStyle)
-		}
-	}
+	entry := widget.NewMultiLineEntry()
+	entry.SetText(fullText)
+	entry.Disable()
 
 	// 1. Define a smooth, light gray color for the background (Hex: #EBEBEB)
 	bgRect := canvas.NewRectangle(clrBg)
 
-	// 2. Put the background and the text grid into a MaxLayout container
-	// MaxLayout stacks items on top of each other, filling the available area
-	backgroundContainer := container.New(layout.NewMaxLayout(), bgRect, grid)
+	backgroundContainer := container.New(layout.NewMaxLayout(), bgRect, entry)
 
-	// Wrap our customized panel inside the scroller
-	scroller := container.NewVScroll(backgroundContainer)
-
-	d := dialog.NewCustom("Agent Details", "Close", scroller, window)
+	d := dialog.NewCustom("Agent Details", "Close", backgroundContainer, window)
 	d.Resize(fyne.NewSize(600, 275))
 	d.Show()
 }
