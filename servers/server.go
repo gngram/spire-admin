@@ -31,6 +31,7 @@ import (
 // SpireServer represents a connected SPIRE server and its aggregated state.
 type SpireServer struct {
 	mu           sync.RWMutex
+	Nickname     string
 	Address      string
 	Port         string
 	Domain       string
@@ -60,8 +61,8 @@ const (
 )
 
 // NewSpireServer initializes a SpireServer and asynchronously fetches its data.
-func NewSpireServer(address, port, agentSocket string) (*SpireServer, error) {
-	logger.Info("New Spire Server: %s:%s, socket:%s", address, port, agentSocket)
+func NewSpireServer(nickname, address, port, agentSocket string) (*SpireServer, error) {
+	logger.Info("New Spire Server [%s]: %s:%s, socket:%s", nickname, address, port, agentSocket)
 	if net.ParseIP(address) == nil {
 		err := fmt.Errorf("invalid address: %s is not a valid IP address", address)
 		logger.Error("Invalid IP address", err)
@@ -75,6 +76,7 @@ func NewSpireServer(address, port, agentSocket string) (*SpireServer, error) {
 	}
 
 	s := &SpireServer{
+		Nickname:     nickname,
 		Address:      address,
 		Port:         port,
 		AgentSocket:  agentSocket,

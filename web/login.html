@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login - SPIRE Admin</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body style="display: flex; align-items: center; justify-content: center; height: 100vh;">
+    <div class="card" style="width: 300px; text-align: center;">
+        <h2>Login</h2>
+        <input type="text" id="username" placeholder="Username" style="width: 90%; margin-bottom: 10px;"><br>
+        <input type="password" id="password" placeholder="Password" style="width: 90%; margin-bottom: 15px;"><br>
+        <button onclick="doLogin()" style="width: 98%;">Sign In</button>
+        <p id="err" class="error"></p>
+    </div>
+    <script src="js/app.js"></script>
+    <script>
+        if (getToken()) window.location.href = 'dashboard.html';
+
+        async function doLogin() {
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username: u, password: p})
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setToken(data.token);
+                localStorage.setItem('spire_admin', data.is_admin);
+                window.location.href = 'dashboard.html';
+            } else {
+                document.getElementById('err').innerText = data.error;
+            }
+        }
+    </script>
+</body>
+</html>

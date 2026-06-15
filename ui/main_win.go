@@ -72,7 +72,7 @@ func NewSpireAdminApp(parentSocket string) *SpireAdminApp {
 // Returns the newly created *Server.
 func (a *SpireAdminApp) AddServer(name, host, port string) (*Server, error) {
 	a.mu.Lock()
-	spireServer, err := servers.NewSpireServer(host, port, a.parentSocket)
+	spireServer, err := servers.NewSpireServer(name, host, port, a.parentSocket)
 	if err != nil {
 		logger.Error("Error creating server", err)
 		a.mu.Unlock()

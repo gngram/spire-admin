@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard - SPIRE Admin</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    
+<nav>
+    <div style="font-weight: bold; font-size: 18px; margin-right: 20px;">SPIRE Web GUI</div>
+    <a href="dashboard.html">Dashboard</a>
+    <a href="servers.html">Servers</a>
+    <a href="admin.html" id="nav-admin" style="display: none;">Admin</a>
+    <div style="flex-grow: 1;"></div>
+    <a href="#" onclick="logout()">Logout</a>
+</nav>
+
+    <div class="container">
+        <div class="card">
+            <h2>Welcome to SPIRE Admin GUI</h2>
+            <p>Select a module from the navigation bar to get started.</p>
+            <ul>
+                <li><strong>Servers:</strong> Connect and monitor your remote SPIRE server instances.</li>
+                <li><strong>Agents & Entries:</strong> View attestation data linked to your servers.</li>
+                <li><strong>Admin:</strong> Manage user access.</li>
+            </ul>
+        </div>
+    </div>
+    <script src="js/app.js"></script>
+    <script>checkAuth();</script>
+</body>
+</html>

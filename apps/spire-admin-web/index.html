@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spire Admin Web</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900">
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <div class="w-64 bg-indigo-900 text-white p-6">
+            <h1 class="text-xl font-bold mb-8">spire-admin</h1>
+            <nav class="space-y-4">
+                <a href="#" class="block py-2 px-4 bg-indigo-800 rounded">Servers</a>
+                <a href="#" class="block py-2 px-4 hover:bg-indigo-800 rounded">Logs</a>
+                <a href="#" class="block py-2 px-4 hover:bg-indigo-800 rounded">Settings</a>
+            </nav>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 p-10 overflow-auto">
+            <div class="flex justify-between items-center mb-8">
+                <div>
+                    <h2 class="text-3xl font-bold">Servers</h2>
+                    <p class="text-slate-500">Manage your SPIRE cluster connections.</p>
+                </div>
+                <button onclick="addServer()" class="bg-indigo-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-indigo-700 transition">
+                    + Add Server
+                </button>
+            </div>
+
+            <!-- Server Grid -->
+            <div id="server-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Loaded via JS -->
+                <div class="animate-pulse bg-white p-6 rounded-xl border border-slate-200">
+                    <div class="h-4 bg-slate-200 rounded w-3/4 mb-4"></div>
+                    <div class="h-4 bg-slate-100 rounded w-1/2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchServers() {
+            try {
+                const res = await fetch('/api/servers');
+                const data = await res.json();
+                renderServers(data);
+            } catch (e) {
+                console.error("Failed to fetch servers", e);
+            }
+        }
+
+        function renderServers(servers) {
+            const container = document.getElementById('server-list');
+            if (!servers || servers.length === 0) {
+                container.innerHTML = `<p class="col-span-full text-center text-slate-400 py-20">No servers added yet.</p>`;
+                return;
+            }
+            
+            container.innerHTML = servers.map(s => `
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition cursor-pointer">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center font-bold">S</div>
+                        <span class="px-2 py-1 rounded text-xs font-bold uppercase ${s.status === 'online' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                            ${s.status}
+                        </span>
+                    </div>
+                    <h3 class="font-bold text-lg">${s.name || s.address}</h3>
+                    <p class="text-slate-500 text-sm mb-4">${s.domain}</p>
+                    <div class="flex space-x-2">
+                        <button class="flex-1 text-xs font-medium py-2 bg-slate-100 hover:bg-slate-200 rounded">Agents</button>
+                        <button class="flex-1 text-xs font-medium py-2 bg-slate-100 hover:bg-slate-200 rounded">Entries</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function addServer() {
+            const name = prompt("Enter Server Name (e.g., Production):");
+            if (!name) return;
+            const address = prompt("Enter Server IP:");
+            if (!address) return;
+            await fetch('/api/servers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, address, port: "8081" })
+            });
+            fetchServers();
+        }
+
+        fetchServers();
+    </script>
+</body>
+</html>

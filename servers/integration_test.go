@@ -58,7 +58,7 @@ func TestIntegration_SpireServerCaches(t *testing.T) {
 
 	// 5. Initialize the SpireServer pointing to Server 1 (127.0.0.1:8081)
 	// By passing agentSocket, we authenticate using the workload API!
-	server, err := NewSpireServer("TestServer1", "127.0.0.1", "8081", agentSocket, 0)
+	server, err := NewSpireServer("TestServer1", "127.0.0.1", "8081", agentSocket)
 	if err != nil {
 		t.Fatalf("failed to create SpireServer instance: %v", err)
 	}
@@ -77,8 +77,8 @@ func TestIntegration_SpireServerCaches(t *testing.T) {
 	}
 
 	// Server 1 should have 3 entries: 2 standard workloads + 1 spire_admin-admin workload
-	if len(server.Workloads) != 3 {
-		t.Errorf("Expected 3 workloads, got %d", len(server.Workloads))
+	if len(server.Entries) != 3 {
+		t.Errorf("Expected 3 entries, got %d", len(server.Entries))
 	}
 
 	// Server 1 should have 1 dynamic federation configured with Server 2 (domain2.test)

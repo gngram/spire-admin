@@ -16,11 +16,11 @@ set -euo pipefail
 #
 # Options:
 #   --admin-server-port   Admin server gRPC port        (default: 8081)
-#   --admin-bundle-port   Admin bundle endpoint port    (default: 8443)
+#   --admin-bundle-port   Admin bundle endpoint port    (default: 8445)
 #   --server-port-a       Server A gRPC port            (default: 8082)
 #   --server-port-b       Server B gRPC port            (default: 8083)
-#   --bundle-port-a       Server A bundle endpoint port (default: 8444)
-#   --bundle-port-b       Server B bundle endpoint port (default: 8445)
+#   --bundle-port-a       Server A bundle endpoint port (default: 8446)
+#   --bundle-port-b       Server B bundle endpoint port (default: 8447)
 # =============================================================================
 
 # ── Validate required positional arg ─────────────────────────────────────────
@@ -36,11 +36,11 @@ shift
 # ── Defaults ──────────────────────────────────────────────────────────────────
 
 ADMIN_SERVER_PORT=8081
-ADMIN_BUNDLE_PORT=8443
+ADMIN_BUNDLE_PORT=8445
 SERVER_PORT_A=8082
 SERVER_PORT_B=8083
-BUNDLE_PORT_A=8444
-BUNDLE_PORT_B=8445
+BUNDLE_PORT_A=8446
+BUNDLE_PORT_B=8447
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
 
@@ -58,8 +58,8 @@ done
 
 # ── Derived paths ─────────────────────────────────────────────────────────────
 
-ADMIN_DIR="${DATA_ROOT}/admin"
-TEST_DIR="${DATA_ROOT}/test"
+ADMIN_DIR="${DATA_ROOT}/spire-admin"
+TEST_DIR="${DATA_ROOT}/spire-test-servers"
 BUNDLES_DIR="${TEST_DIR}/trust_bundles"
 
 # Ensure all paths are absolute
@@ -70,7 +70,7 @@ for var in ADMIN_DIR TEST_DIR BUNDLES_DIR; do
   fi
 done
 
-ADMIN_SOCK="${ADMIN_DIR}/admin-server.sock"
+ADMIN_SOCK="${ADMIN_DIR}/server.sock"
 
 # =============================================================================
 # SHARED HELPERS
@@ -106,7 +106,7 @@ wait_for_server() {
 cleanup_admin() {
   log "Cleaning up previous admin data..."
   killall spire-server spire-agent 2>/dev/null || true
-  rm -rf "${ADMIN_DIR}/admin-server"* "${ADMIN_DIR}/admin-agent"*
+  rm -rf "${ADMIN_DIR}" 
   mkdir -p "${ADMIN_DIR}"
 }
 
@@ -154,7 +154,7 @@ agent {
     log_level = "INFO"
     server_address = "127.0.0.1"
     server_port = ${ADMIN_SERVER_PORT}
-    socket_path = "${ADMIN_DIR}/admin-agent.sock"
+    socket_path = "${ADMIN_DIR}/agent.sock"
     trust_domain = "admin.app"
     trust_bundle_path = "${BUNDLES_DIR}/admin-server.pem"
 }
@@ -288,7 +288,7 @@ generate_trust_bundle() {
     > "${BUNDLES_DIR}/test-server-a.pem"
   spire-server bundle show -socketPath "${TEST_DIR}/test-server-b.sock" \
     > "${BUNDLES_DIR}/test-server-b.pem"
-  spire-server bundle show -socketPath "${ADMIN_DIR}/admin-server.sock" \
+  spire-server bundle show -socketPath "${ADMIN_SOCK}" \
     > "${BUNDLES_DIR}/admin-server.pem"
 
 }
