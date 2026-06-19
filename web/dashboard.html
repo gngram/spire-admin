@@ -1,32 +1,1368 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Dashboard - SPIRE Admin</title>
+    <title>SPIRE Admin Console</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
-    
-<nav>
-    <div style="font-weight: bold; font-size: 18px; margin-right: 20px;">SPIRE Web GUI</div>
-    <a href="dashboard.html">Dashboard</a>
-    <a href="servers.html">Servers</a>
-    <a href="admin.html" id="nav-admin" style="display: none;">Admin</a>
-    <div style="flex-grow: 1;"></div>
-    <a href="#" onclick="logout()">Logout</a>
-</nav>
+<body class="theme-purple">
+    <div class="app-layout">
+        
+        <!-- MAIN NAVIGATION SIDEBAR -->
+        <div class="sidebar" id="main-sidebar">
+            <div class="sidebar-header">
+                <span class="icon">🖥️</span>
+                <span>spire-admin</span>
+            </div>
+            <div class="sidebar-menu">
+                <div class="sidebar-menu-title">Application</div>
+                <a class="nav-item active" onclick="switchMainTab('servers')">
+                    <span>🖥️</span> Servers
+                </a>
+                <a class="nav-item" onclick="switchMainTab('settings')">
+                    <span>⚙️</span> Settings
+                </a>
+                <a class="nav-item" onclick="switchMainTab('logs')">
+                    <span>📄</span> Logs
+                </a>
+                <a class="nav-item" onclick="switchMainTab('about')">
+                    <span>ℹ️</span> About
+                </a>
+            </div>
+            <div class="sidebar-footer">
+                <a class="nav-item" id="nav-admin" style="display: none; padding: 10px;" onclick="switchMainTab('admin')">
+                    <span>👑</span> User Manager
+                </a>
+                <button class="btn btn-secondary" onclick="logout()" style="width: 100%;">Logout</button>
+            </div>
+        </div>
 
-    <div class="container">
-        <div class="card">
-            <h2>Welcome to SPIRE Admin GUI</h2>
-            <p>Select a module from the navigation bar to get started.</p>
-            <ul>
-                <li><strong>Servers:</strong> Connect and monitor your remote SPIRE server instances.</li>
-                <li><strong>Agents & Entries:</strong> View attestation data linked to your servers.</li>
-                <li><strong>Admin:</strong> Manage user access.</li>
-            </ul>
+        <!-- SERVER DETAILS NAVIGATION SIDEBAR -->
+        <div class="sidebar" id="server-sidebar" style="display: none;">
+            <div class="back-btn-container">
+                <button class="btn btn-secondary" onclick="exitServerView()" style="width: 100%; font-size: 13px;">
+                    ← Back to Servers
+                </button>
+            </div>
+            <div class="sidebar-header" id="server-sidebar-title">
+                <span class="icon">🔌</span>
+                <span>Server Address</span>
+            </div>
+            <div class="sidebar-menu">
+                <div class="sidebar-menu-title">Administration</div>
+                <a class="nav-item active" onclick="switchServerTab('agents')">
+                    <span>👥</span> Registered Agents
+                </a>
+                <a class="nav-item" onclick="switchServerTab('bundles')">
+                    <span>📦</span> Federated Bundles
+                </a>
+                <a class="nav-item" onclick="switchServerTab('federations')">
+                    <span>🌐</span> Federations
+                </a>
+                <a class="nav-item" onclick="switchServerTab('entries')">
+                    <span>📝</span> Registered Entries
+                </a>
+                <a class="nav-item" onclick="switchServerTab('local-auth')">
+                    <span>🔑</span> Local Authority
+                </a>
+                <a class="nav-item" onclick="switchServerTab('upstream-auth')">
+                    <span>⛓️</span> Upstream Authority
+                </a>
+            </div>
+            <div class="sidebar-footer">
+                <button class="btn btn-secondary" onclick="logout()" style="width: 100%;">Logout</button>
+            </div>
+        </div>
+
+        <!-- WORKSPACE CONTENT AREA -->
+        <div class="main-content">
+            
+            <!-- CONTENT HEADER -->
+            <div class="content-header">
+                <div class="header-title">
+                    <h2 id="page-title">Servers</h2>
+                    <p id="page-subtitle">Manage the list of Spire servers you want to administrate.</p>
+                </div>
+                <div class="header-actions" id="header-actions">
+                    <!-- Dynamic header actions go here -->
+                </div>
+            </div>
+
+            <!-- CONTENT BODY -->
+            <div class="content-body" id="content-body">
+                
+                <!-- MAIN VIEW: SERVERS -->
+                <div class="tab-pane active" id="view-servers">
+                    <div class="card">
+                        <h3>Connect a Server</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="srv-name">Server Name</label>
+                                <input type="text" id="srv-name" placeholder="Given Name (e.g. Production Server)">
+                            </div>
+                            <div class="form-group">
+                                <label for="srv-address">Address</label>
+                                <input type="text" id="srv-address" placeholder="IP Address (e.g. 127.0.0.1)">
+                            </div>
+                            <div class="form-group">
+                                <label for="srv-port">Port</label>
+                                <input type="text" id="srv-port" placeholder="Port (e.g. 8081)">
+                            </div>
+                        </div>
+                        <div>
+                            <button class="btn btn-primary" onclick="addServer()">Connect Server</button>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3>Connected Servers</h3>
+                        <div class="table-responsive">
+                            <table id="servers-list-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Domain</th>
+                                        <th>Status</th>
+                                        <th>Last Updates</th>
+                                        <th style="text-align: right;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Dynamic Server Rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MAIN VIEW: SETTINGS -->
+                <div class="tab-pane" id="view-settings" style="display: none;">
+                    <div class="card" style="max-width: 600px;">
+                        <h3>Select Theme</h3>
+                        <div class="form-group">
+                            <label for="theme-selector">Choose a CSS palette:</label>
+                            <select id="theme-selector" onchange="changeAppTheme(this.value)">
+                                <option value="Purple">Purple</option>
+                                <option value="Green">Green</option>
+                                <option value="Blue">Blue</option>
+                                <option value="Gray">Gray</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MAIN VIEW: LOGS -->
+                <div class="tab-pane" id="view-logs" style="display: none;">
+                    <div class="card">
+                        <h3>View application events and system logs</h3>
+                        <div class="log-console" id="log-console-box">
+                            System initialized...
+                            Waiting for events...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MAIN VIEW: ABOUT -->
+                <div class="tab-pane" id="view-about" style="display: none;">
+                    <div class="card" style="max-width: 600px; text-align: center;">
+                        <div class="about-box">
+                            <span style="font-size: 48px;">🖥️</span>
+                            <h2>spire-admin</h2>
+                            <p>SPIRE Administration Console - Web Version</p>
+                            <p style="color: var(--muted); font-size: 13px;">Manage remote SPIRE Servers securely over local gRPC administration channels.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MAIN VIEW: ADMIN (USER MANAGER) -->
+                <div class="tab-pane" id="view-admin" style="display: none;">
+                    <div class="card" style="max-width: 600px;">
+                        <h3>Provision New User</h3>
+                        <div class="form-group">
+                            <label for="admin-new-user">Username</label>
+                            <input type="text" id="admin-new-user" placeholder="Username">
+                        </div>
+                        <div class="form-group">
+                            <label for="admin-new-pass">Password</label>
+                            <input type="password" id="admin-new-pass" placeholder="Password">
+                        </div>
+                        <div class="form-group" style="flex-direction: row; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="admin-is-admin" style="width: auto;">
+                            <label for="admin-is-admin">Is Administrator</label>
+                        </div>
+                        <div>
+                            <button class="btn btn-success" onclick="adminCreateUser()">Create Account</button>
+                        </div>
+                        <p id="admin-msg" style="font-size: 13px; font-weight: bold; margin-top: 10px;"></p>
+                    </div>
+                </div>
+
+                <!-- SERVER DETAIL PANES -->
+                <div id="server-workspace" style="display: none; flex-direction: column; gap: 20px;">
+                    
+                    <!-- SERVER DETAIL TAB: AGENTS -->
+                    <div class="server-tab-pane" id="server-pane-agents" style="display: none;">
+                        <div class="card">
+                            <h3>Registered SPIRE Agents</h3>
+                            <div class="table-responsive">
+                                <table id="agents-table">
+                                    <thead>
+                                        <tr>
+                                            <th>SPIFFE ID</th>
+                                            <th style="text-align: right;">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SERVER DETAIL TAB: BUNDLES -->
+                    <div class="server-tab-pane" id="server-pane-bundles" style="display: none;">
+                        <div class="card">
+                            <h3>Federated Trust Bundles</h3>
+                            <div class="table-responsive">
+                                <table id="bundles-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Trust Domain</th>
+                                            <th style="text-align: right;">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SERVER DETAIL TAB: FEDERATIONS -->
+                    <div class="server-tab-pane" id="server-pane-federations" style="display: none;">
+                        <div class="card">
+                            <h3>Federation Relationships</h3>
+                            <div class="table-responsive">
+                                <table id="federations-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Trust Domain</th>
+                                            <th>Endpoint Address</th>
+                                            <th style="text-align: right;">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SERVER DETAIL TAB: ENTRIES -->
+                    <div class="server-tab-pane" id="server-pane-entries" style="display: none;">
+                        <div class="card">
+                            <div class="tabs">
+                                <div class="tab active" onclick="switchEntrySubTab('workloads')">Workloads</div>
+                                <div class="tab" onclick="switchEntrySubTab('agents')">Agents</div>
+                                <div class="tab" onclick="switchEntrySubTab('downstreams')">Downstream Servers</div>
+                            </div>
+                            <div class="tab-content active" id="entry-subtab-workloads">
+                                <div class="table-responsive">
+                                    <table id="entries-table-workloads">
+                                        <thead><tr><th>SPIFFE ID</th><th style="text-align: right;">Actions</th></tr></thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="tab-content" id="entry-subtab-agents" style="display: none;">
+                                <div class="table-responsive">
+                                    <table id="entries-table-agents">
+                                        <thead><tr><th>SPIFFE ID</th><th style="text-align: right;">Actions</th></tr></thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="tab-content" id="entry-subtab-downstreams" style="display: none;">
+                                <div class="table-responsive">
+                                    <table id="entries-table-downstreams">
+                                        <thead><tr><th>SPIFFE ID</th><th style="text-align: right;">Actions</th></tr></thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SERVER DETAIL TAB: LOCAL AUTHORITY -->
+                    <div class="server-tab-pane" id="server-pane-local-auth" style="display: none;">
+                        <div class="card">
+                            <h3>Active Authority</h3>
+                            <div class="text-details" id="local-auth-active">No active local authority state loaded.</div>
+                        </div>
+                        <div class="card">
+                            <h3>Prepared Authority</h3>
+                            <div class="text-details" id="local-auth-prepared">No prepared local authority state loaded.</div>
+                        </div>
+                        <div class="card">
+                            <h3>Old Authority</h3>
+                            <div class="text-details" id="local-auth-old">No old local authority state loaded.</div>
+                        </div>
+                    </div>
+
+                    <!-- SERVER DETAIL TAB: UPSTREAM AUTHORITY -->
+                    <div class="server-tab-pane" id="server-pane-upstream-auth" style="display: none;">
+                        <div class="card">
+                            <h3>Revoke or Taint Upstream Authority</h3>
+                            <div class="form-group">
+                                <label for="upstream-skid">Upstream Subject Key ID (Hex)</label>
+                                <input type="text" id="upstream-skid" placeholder="Subject Key ID (Hex)">
+                            </div>
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn btn-primary" onclick="upstreamAction('revoke')">Revoke</button>
+                                <button class="btn btn-secondary" onclick="upstreamAction('taint')">Taint</button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- MODAL: ADD SERVER DIALOG -->
+    <!-- (Handled inline in Servers page card now) -->
+
+    <!-- MODAL: GENERIC INFO/DETAILS MODAL -->
+    <div class="modal" id="info-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="info-modal-title">Details</h3>
+                <span class="close-btn" onclick="closeModal('info-modal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="text-details" id="info-modal-text"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('info-modal')">Close</button>
+            </div>
         </div>
     </div>
+
+    <!-- MODAL: CREATE ENTRY DIALOG -->
+    <div class="modal" id="create-entry-modal">
+        <div class="modal-content" style="width: 600px;">
+            <div class="modal-header">
+                <h3>New Entry</h3>
+                <span class="close-btn" onclick="closeModal('create-entry-modal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="entry-spiffe-id">SPIFFE ID:</label>
+                    <input type="text" id="entry-spiffe-id" placeholder="spiffe://example.org/new-workload">
+                </div>
+                <div class="form-group">
+                    <label for="entry-parent-id">Parent ID:</label>
+                    <input type="text" id="entry-parent-id" placeholder="spiffe://example.org/spire/agent/xyz">
+                </div>
+                <div class="form-group">
+                    <label for="entry-selectors">Selectors (comma-separated):</label>
+                    <input type="text" id="entry-selectors" placeholder="unix:uid:1000,unix:gid:1000">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('create-entry-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="submitCreateEntry()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: UPDATE ENTRY DIALOG -->
+    <div class="modal" id="update-entry-modal">
+        <div class="modal-content" style="width: 600px;">
+            <div class="modal-header">
+                <h3>Update Entry</h3>
+                <span class="close-btn" onclick="closeModal('update-entry-modal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="update-entry-id">
+                <div class="form-group">
+                    <label for="update-entry-dns">DNS Names (comma-separated):</label>
+                    <input type="text" id="update-entry-dns" placeholder="DNS Names">
+                </div>
+                <div class="form-group">
+                    <label for="update-entry-hint">Hint:</label>
+                    <input type="text" id="update-entry-hint" placeholder="Hint">
+                </div>
+                <div class="form-group">
+                    <label for="update-entry-ttl">TTL:</label>
+                    <input type="number" id="update-entry-ttl" placeholder="TTL">
+                </div>
+                <div class="form-group">
+                    <label for="update-entry-federates">Federates With (comma-separated):</label>
+                    <input type="text" id="update-entry-federates" placeholder="Federates With">
+                </div>
+                <div class="form-group" style="flex-direction: row; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="update-entry-downstream" style="width: auto;">
+                    <label for="update-entry-downstream">Downstream</label>
+                </div>
+                <div class="form-group" style="flex-direction: row; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="update-entry-admin" style="width: auto;">
+                    <label for="update-entry-admin">Admin</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('update-entry-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="submitUpdateEntry()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: SET FEDERATED BUNDLE DIALOG -->
+    <div class="modal" id="bundle-modal">
+        <div class="modal-content" style="width: 600px;">
+            <div class="modal-header">
+                <h3 id="bundle-modal-title">Set Federated Bundle</h3>
+                <span class="close-btn" onclick="closeModal('bundle-modal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group" id="bundle-td-container">
+                    <label for="bundle-trust-domain">Trust Domain:</label>
+                    <input type="text" id="bundle-trust-domain" placeholder="example.org">
+                </div>
+                <div class="form-group">
+                    <label for="bundle-pem-content">Bundle Certificates (PEM format):</label>
+                    <textarea id="bundle-pem-content" placeholder="-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('bundle-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="submitSetBundle()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: FEDERATION DIALOG -->
+    <div class="modal" id="federation-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="federation-modal-title">New Federation</h3>
+                <span class="close-btn" onclick="closeModal('federation-modal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group" id="federation-td-container">
+                    <label for="federation-trust-domain">Trust Domain:</label>
+                    <input type="text" id="federation-trust-domain" placeholder="example.org">
+                </div>
+                <div class="form-group">
+                    <label for="federation-endpoint-url">Endpoint URL:</label>
+                    <input type="text" id="federation-endpoint-url" placeholder="https://endpoint-url">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('federation-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="submitFederation()">Save</button>
+            </div>
+        </div>
+    </div>
+
     <script src="js/app.js"></script>
-    <script>checkAuth();</script>
+    <script>
+        checkAuth();
+
+        // Current UI State
+        let activeServerId = null;
+        let activeServerName = "";
+        let logInterval = null;
+
+        // Switch tabs in sidebar
+        function switchMainTab(tab) {
+            // Stop logging interval if leaving logs
+            if (logInterval) {
+                clearInterval(logInterval);
+                logInterval = null;
+            }
+
+            // Set sidebar active styles
+            document.querySelectorAll('#main-sidebar .nav-item').forEach(el => el.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+
+            // Hide all tab panes
+            document.querySelectorAll('.tab-pane').forEach(el => el.style.display = 'none');
+            document.getElementById('server-workspace').style.display = 'none';
+
+            // Show selected pane
+            const titleEl = document.getElementById('page-title');
+            const subtitleEl = document.getElementById('page-subtitle');
+            const actionsEl = document.getElementById('header-actions');
+            actionsEl.innerHTML = '';
+
+            if (tab === 'servers') {
+                titleEl.innerText = "Servers";
+                subtitleEl.innerText = "Manage the list of Spire servers you want to administrate.";
+                document.getElementById('view-servers').style.display = 'block';
+                loadServers();
+            } else if (tab === 'settings') {
+                titleEl.innerText = "Settings";
+                subtitleEl.innerText = "Application settings and preferences.";
+                document.getElementById('view-settings').style.display = 'block';
+                document.getElementById('theme-selector').value = getTheme();
+            } else if (tab === 'logs') {
+                titleEl.innerText = "Logs";
+                subtitleEl.innerText = "View application events and system logs.";
+                document.getElementById('view-logs').style.display = 'block';
+                loadLogs();
+                logInterval = setInterval(loadLogs, 3000);
+            } else if (tab === 'about') {
+                titleEl.innerText = "About";
+                subtitleEl.innerText = "";
+                document.getElementById('view-about').style.display = 'block';
+            } else if (tab === 'admin') {
+                titleEl.innerText = "User Manager";
+                subtitleEl.innerText = "Provision accounts for administrators and operators.";
+                document.getElementById('view-admin').style.display = 'block';
+            }
+        }
+
+        function changeAppTheme(val) {
+            setTheme(val);
+        }
+
+        // Load Servers List
+        async function loadServers() {
+            try {
+                const res = await apiFetch('/api/servers');
+                const data = await res.json();
+                const tbody = document.querySelector('#servers-list-table tbody');
+                tbody.innerHTML = '';
+                
+                if (data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--muted);">No servers connected. Use the form above to connect a server.</td></tr>`;
+                    return;
+                }
+
+                data.forEach(s => {
+                    let statusClass = 'status-unknown';
+                    const statusStr = (s.status || '').toLowerCase();
+                    if (statusStr === 'online') statusClass = 'status-online';
+                    else if (statusStr === 'connecting') statusClass = 'status-connecting';
+                    else if (statusStr === 'offline') statusClass = 'status-offline';
+
+                    let lastUpdatedDisplay = 'Never';
+                    if (s.last_updated && s.last_updated > 0) {
+                        const d = new Date(s.last_updated * 1000);
+                        lastUpdatedDisplay = d.toLocaleString();
+                    }
+
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div class="server-chip" onclick="enterServerView(${s.id}, '${s.name}')">≡</div>
+                                    <span style="font-weight: bold; cursor: pointer;" onclick="enterServerView(${s.id}, '${s.name}')">${s.name}</span>
+                                </div>
+                            </td>
+                            <td>${s.domain || 'Unknown'}</td>
+                            <td>
+                                <span class="status-dot ${statusClass}"></span>
+                                <span style="font-weight: bold;">${s.status}</span>
+                            </td>
+                            <td>${lastUpdatedDisplay}</td>
+                            <td style="text-align: right;">
+                                <button class="btn btn-secondary btn-icon" onclick="refreshServer(${s.id})">🔄</button>
+                                <button class="btn btn-secondary btn-icon btn-danger" onclick="deleteServer(${s.id}, '${s.name}')">🗑️</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        async function addServer() {
+            const name = document.getElementById('srv-name').value;
+            const address = document.getElementById('srv-address').value;
+            const port = document.getElementById('srv-port').value;
+            if (!name || !address || !port) {
+                alert("Please fill all server connection fields.");
+                return;
+            }
+            try {
+                const res = await apiFetch('/api/servers', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, address, port})
+                });
+                if (res.ok) {
+                    document.getElementById('srv-name').value = '';
+                    document.getElementById('srv-address').value = '';
+                    document.getElementById('srv-port').value = '';
+                    loadServers();
+                } else {
+                    const err = await res.json();
+                    alert("Error connecting: " + (err.error || 'unknown'));
+                }
+            } catch(e) {
+                alert("Failed to send request.");
+            }
+        }
+
+        async function refreshServer(id) {
+            await apiFetch(`/api/servers/${id}/refresh`, { method: 'POST' });
+            loadServers();
+        }
+
+        async function deleteServer(id, name) {
+            if (!confirm(`Are you sure you want to remove server "${name}"?`)) return;
+            await apiFetch(`/api/servers/${id}`, { method: 'DELETE' });
+            loadServers();
+        }
+
+        // Load System Logs
+        async function loadLogs() {
+            try {
+                const res = await apiFetch('/api/logs');
+                const data = await res.json();
+                const logBox = document.getElementById('log-console-box');
+                logBox.innerText = data.logs || "No logs available.";
+                logBox.scrollTop = logBox.scrollHeight;
+            } catch (e) {}
+        }
+
+        // Provision User account
+        async function adminCreateUser() {
+            const u = document.getElementById('admin-new-user').value;
+            const p = document.getElementById('admin-new-pass').value;
+            const isAdm = document.getElementById('admin-is-admin').checked;
+            if (!u || !p) {
+                alert("Please fill username and password fields.");
+                return;
+            }
+            try {
+                const res = await apiFetch('/api/users', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: u, password: p, is_admin: isAdm})
+                });
+                const data = await res.json();
+                document.getElementById('admin-msg').innerText = data.status || data.error || "Done.";
+                if (res.ok) {
+                    document.getElementById('admin-new-user').value = '';
+                    document.getElementById('admin-new-pass').value = '';
+                    document.getElementById('admin-is-admin').checked = false;
+                }
+            } catch(e) {
+                document.getElementById('admin-msg').innerText = "Request failed.";
+            }
+        }
+
+        // Server Details Navigation
+        function enterServerView(id, name) {
+            activeServerId = id;
+            activeServerName = name;
+            
+            // Switch sidebar navigation panel
+            document.getElementById('main-sidebar').style.display = 'none';
+            document.getElementById('server-sidebar').style.display = 'flex';
+            document.getElementById('server-sidebar-title').querySelector('span:last-child').innerText = name;
+            
+            // Hide main panels
+            document.querySelectorAll('.tab-pane').forEach(el => el.style.display = 'none');
+            document.getElementById('server-workspace').style.display = 'flex';
+
+            // Select default tab
+            switchServerTab('agents');
+        }
+
+        function exitServerView() {
+            activeServerId = null;
+            activeServerName = "";
+
+            // Switch sidebar back
+            document.getElementById('server-sidebar').style.display = 'none';
+            document.getElementById('main-sidebar').style.display = 'flex';
+
+            // Reset navigation header style
+            document.querySelectorAll('#main-sidebar .nav-item').forEach(el => el.classList.remove('active'));
+            document.querySelector('#main-sidebar .nav-item:first-child').classList.add('active');
+
+            // Reset titles and display
+            switchMainTab('servers');
+        }
+
+        function switchServerTab(tab) {
+            // Highlight nav item
+            document.querySelectorAll('#server-sidebar .nav-item').forEach(el => el.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+
+            // Hide all sub-panes
+            document.querySelectorAll('.server-tab-pane').forEach(el => el.style.display = 'none');
+
+            const titleEl = document.getElementById('page-title');
+            const subtitleEl = document.getElementById('page-subtitle');
+            const actionsEl = document.getElementById('header-actions');
+            actionsEl.innerHTML = '';
+
+            if (tab === 'agents') {
+                titleEl.innerText = "Agents";
+                subtitleEl.innerText = "Manage SPIRE agents connected to " + activeServerName + ".";
+                actionsEl.innerHTML = `
+                    <button class="btn btn-secondary" onclick="loadServerAgents()">Refresh</button>
+                    <button class="btn btn-danger" onclick="purgeExpiredAgents()">Purge Expired</button>
+                `;
+                document.getElementById('server-pane-agents').style.display = 'block';
+                loadServerAgents();
+            } else if (tab === 'bundles') {
+                titleEl.innerText = "Federated Bundles";
+                subtitleEl.innerText = "Manage federated trust bundles in " + activeServerName + ".";
+                actionsEl.innerHTML = `
+                    <button class="btn btn-secondary" onclick="loadServerBundles()">Refresh</button>
+                    <button class="btn btn-primary" onclick="openSetBundleModal(null)">New</button>
+                `;
+                document.getElementById('server-pane-bundles').style.display = 'block';
+                loadServerBundles();
+            } else if (tab === 'federations') {
+                titleEl.innerText = "Federation Relationships";
+                subtitleEl.innerText = "Manage dynamic federation relationships with foreign trust domains.";
+                actionsEl.innerHTML = `
+                    <button class="btn btn-secondary" onclick="loadServerFederations()">Refresh</button>
+                    <button class="btn btn-primary" onclick="openFederationModal(null)">New</button>
+                `;
+                document.getElementById('server-pane-federations').style.display = 'block';
+                loadServerFederations();
+            } else if (tab === 'entries') {
+                titleEl.innerText = "Entries";
+                subtitleEl.innerText = "Manage registered workload/agent entries.";
+                actionsEl.innerHTML = `
+                    <button class="btn btn-secondary" onclick="loadServerEntries()">Refresh</button>
+                    <button class="btn btn-primary" onclick="openCreateEntryModal()">New</button>
+                `;
+                document.getElementById('server-pane-entries').style.display = 'block';
+                loadServerEntries();
+            } else if (tab === 'local-auth') {
+                titleEl.innerText = "Local X.509 Authorities";
+                subtitleEl.innerText = "Manage local signing authorities and rotation.";
+                actionsEl.innerHTML = `
+                    <button class="btn btn-secondary" onclick="loadLocalAuthorities()">Refresh</button>
+                    <button class="btn btn-primary" onclick="rotateLocalAuthority()">New</button>
+                `;
+                document.getElementById('server-pane-local-auth').style.display = 'block';
+                loadLocalAuthorities();
+            } else if (tab === 'upstream-auth') {
+                titleEl.innerText = "Upstream Authority";
+                subtitleEl.innerText = "Manage upstream X.509 authority trust.";
+                document.getElementById('server-pane-upstream-auth').style.display = 'block';
+            }
+        }
+
+        // Modals management
+        function openModal(id) {
+            document.getElementById(id).style.display = 'flex';
+        }
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        // Registered Agents Actions
+        async function loadServerAgents() {
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/agents`);
+                const data = await res.json();
+                const tbody = document.querySelector('#agents-table tbody');
+                tbody.innerHTML = '';
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--muted);">No agents registered.</td></tr>`;
+                    return;
+                }
+                data.forEach(a => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td style="font-family: monospace;">${a.SPIFFEID}</td>
+                            <td style="text-align: right;">
+                                <button class="btn btn-secondary" onclick="showAgentInfo('${a.SPIFFEID}')">Info</button>
+                                <button class="btn btn-secondary" onclick="evictAgent('${a.SPIFFEID}')">Evict</button>
+                                <button class="btn btn-secondary btn-danger" onclick="banAgent('${a.SPIFFEID}')">Ban</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } catch(e) {
+                alert("Failed to load agents.");
+            }
+        }
+
+        async function showAgentInfo(spiffeID) {
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/agents/info?spiffe_id=${encodeURIComponent(spiffeID)}`);
+                const data = await res.json();
+                document.getElementById('info-modal-title').innerText = "Agent Details";
+                document.getElementById('info-modal-text').innerText = data.info || "No details.";
+                openModal('info-modal');
+            } catch(e) {
+                alert("Failed to get agent info.");
+            }
+        }
+
+        async function evictAgent(spiffeID) {
+            if (!confirm(`Are you sure you want to evict agent ${spiffeID}?`)) return;
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/agents/evict`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({spiffe_id: spiffeID})
+                });
+                if (res.ok) {
+                    loadServerAgents();
+                } else {
+                    const d = await res.json();
+                    alert(d.error || "Failed");
+                }
+            } catch (e) {}
+        }
+
+        async function banAgent(spiffeID) {
+            if (!confirm(`Are you sure you want to ban agent ${spiffeID}?`)) return;
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/agents/ban`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({spiffe_id: spiffeID})
+                });
+                if (res.ok) {
+                    loadServerAgents();
+                } else {
+                    const d = await res.json();
+                    alert(d.error || "Failed");
+                }
+            } catch (e) {}
+        }
+
+        async function purgeExpiredAgents() {
+            if (!confirm(`Are you sure you want to purge all expired agents?`)) return;
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/agents/purge-expired`, { method: 'POST' });
+                if (res.ok) {
+                    loadServerAgents();
+                } else {
+                    const d = await res.json();
+                    alert(d.error || "Failed");
+                }
+            } catch (e) {}
+        }
+
+        // Trust Bundles Actions
+        async function loadServerBundles() {
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/bundles`);
+                const data = await res.json();
+                const tbody = document.querySelector('#bundles-table tbody');
+                tbody.innerHTML = '';
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--muted);">No federated bundles.</td></tr>`;
+                    return;
+                }
+                data.forEach(b => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td style="font-weight: bold;">${b.trustDomain}</td>
+                            <td style="text-align: right;">
+                                <button class="btn btn-secondary" onclick="showBundleInfo('${b.trustDomain}')">Info</button>
+                                <button class="btn btn-secondary" onclick="openSetBundleModal('${b.trustDomain}')">Update</button>
+                                <button class="btn btn-secondary btn-danger" onclick="deleteBundle('${b.trustDomain}')">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } catch(e) {
+                alert("Failed to load bundles.");
+            }
+        }
+
+        async function showBundleInfo(td) {
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/bundles/info?trust_domain=${encodeURIComponent(td)}`);
+                const data = await res.json();
+                
+                let text = `Trust Domain  : ${data.trustDomain}\nSequence      : ${data.sequenceNumber || 0}\nRefresh Hint  : ${data.refreshHint || 0} seconds\n`;
+                if (data.x509Authorities) {
+                    text += `\nX.509 Authorities (${data.x509Authorities.length}):\n`;
+                    data.x509Authorities.forEach((auth, idx) => {
+                        text += `  [${idx}] Certificate Payload (DER/ASN.1) encoded length: ${auth.asn1 ? auth.asn1.length : 0} bytes\n`;
+                    });
+                }
+                if (data.jwtAuthorities) {
+                    text += `\nJWT Authorities (${data.jwtAuthorities.length}):\n`;
+                    data.jwtAuthorities.forEach((auth, idx) => {
+                        text += `  [${idx}] Key ID: ${auth.keyId}\n`;
+                    });
+                }
+
+                document.getElementById('info-modal-title').innerText = "Bundle Details: " + td;
+                document.getElementById('info-modal-text').innerText = text;
+                openModal('info-modal');
+            } catch(e) {
+                alert("Failed to get bundle info.");
+            }
+        }
+
+        function openSetBundleModal(td) {
+            const isUpdate = (td !== null);
+            document.getElementById('bundle-modal-title').innerText = isUpdate ? "Update Federated Bundle" : "Set Federated Bundle";
+            const tdContainer = document.getElementById('bundle-td-container');
+            if (isUpdate) {
+                tdContainer.style.display = 'none';
+                document.getElementById('bundle-trust-domain').value = td;
+            } else {
+                tdContainer.style.display = 'flex';
+                document.getElementById('bundle-trust-domain').value = '';
+            }
+            document.getElementById('bundle-pem-content').value = '';
+            openModal('bundle-modal');
+        }
+
+        async function submitSetBundle() {
+            const td = document.getElementById('bundle-trust-domain').value;
+            const pem = document.getElementById('bundle-pem-content').value;
+            if (!td || !pem) {
+                alert("Please fill all bundle fields.");
+                return;
+            }
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/bundles`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({trust_domain: td, pem_content: pem})
+                });
+                if (res.ok) {
+                    closeModal('bundle-modal');
+                    loadServerBundles();
+                } else {
+                    const d = await res.json();
+                    alert(d.error || "Failed");
+                }
+            } catch (e) {}
+        }
+
+        async function deleteBundle(td) {
+            if (!confirm(`Delete federated bundle for ${td}?`)) return;
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/bundles?trust_domain=${encodeURIComponent(td)}`, {
+                    method: 'DELETE'
+                });
+                if (res.ok) {
+                    loadServerBundles();
+                } else {
+                    const d = await res.json();
+                    alert(d.error || "Failed");
+                }
+            } catch(e) {}
+        }
+
+        // Federations Actions
+        async function loadServerFederations() {
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/federations`);
+                const data = await res.json();
+                const tbody = document.querySelector('#federations-table tbody');
+                tbody.innerHTML = '';
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--muted);">No federations configured.</td></tr>`;
+                    return;
+                }
+                data.forEach(f => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td style="font-weight: bold;">${f.TrustDomain}</td>
+                            <td>${f.Address}</td>
+                            <td style="text-align: right;">
+                                <button class="btn btn-secondary" onclick="showFederationInfo('${f.TrustDomain}')">Info</button>
+                                <button class="btn btn-secondary" onclick="openFederationModal('${f.TrustDomain}', '${f.Address}')">Update</button>
+                                <button class="btn btn-secondary" onclick="refreshFederation('${f.TrustDomain}')">Refresh</button>
+                                <button class="btn btn-secondary btn-danger" onclick="deleteFederation('${f.TrustDomain}')">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } catch(e) {
+                alert("Failed to load federations.");
+            }
+        }
+
+        async function showFederationInfo(td) {
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/federations/info?trust_domain=${encodeURIComponent(td)}`);
+                const data = await res.json();
+                const details = `Trust Domain: ${data.trustDomain}\nBundle Endpoint: ${data.bundleEndpointUrl}\nSPIFFE ID: ${data.bundleEndpointProfile || 'N/A'}`;
+                document.getElementById('info-modal-title').innerText = "Federation Relationship Info";
+                document.getElementById('info-modal-text').innerText = details;
+                openModal('info-modal');
+            } catch(e) {
+                alert("Failed to get federation info.");
+            }
+        }
+
+        function openFederationModal(td, address) {
+            const isUpdate = (td !== null);
+            document.getElementById('federation-modal-title').innerText = isUpdate ? "Update Federation Relationship" : "New Federation Relationship";
+            const tdContainer = document.getElementById('federation-td-container');
+            if (isUpdate) {
+                tdContainer.style.display = 'none';
+                document.getElementById('federation-trust-domain').value = td;
+                document.getElementById('federation-endpoint-url').value = address || '';
+            } else {
+                tdContainer.style.display = 'flex';
+                document.getElementById('federation-trust-domain').value = '';
+                document.getElementById('federation-endpoint-url').value = '';
+            }
+            openModal('federation-modal');
+        }
+
+        async function submitFederation() {
+            const td = document.getElementById('federation-trust-domain').value;
+            const url = document.getElementById('federation-endpoint-url').value;
+            if (!td || !url) {
+                alert("Please fill all federation fields.");
+                return;
+            }
+            const isUpdate = document.getElementById('federation-modal-title').innerText.indexOf("Update") !== -1;
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/federations`, {
+                    method: isUpdate ? 'PUT' : 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({trust_domain: td, endpoint_url: url})
+                });
+                if (res.ok) {
+                    closeModal('federation-modal');
+                    loadServerFederations();
+                } else {
+                    const d = await res.json();
+                    alert(d.error || "Failed");
+                }
+            } catch (e) {}
+        }
+
+        async function refreshFederation(td) {
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/federations/refresh?trust_domain=${encodeURIComponent(td)}`, {
+                    method: 'POST'
+                });
+                if (res.ok) {
+                    alert("Bundle refreshed successfully.");
+                    loadServerFederations();
+                } else {
+                    const d = await res.json();
+                    alert(d.error || "Failed");
+                }
+            } catch(e) {}
+        }
+
+        async function deleteFederation(td) {
+            if (!confirm(`Delete relationship with ${td}?`)) return;
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/federations?trust_domain=${encodeURIComponent(td)}`, {
+                    method: 'DELETE'
+                });
+                if (res.ok) {
+                    loadServerFederations();
+                } else {
+                    const d = await res.json();
+                    alert(d.error || "Failed");
+                }
+            } catch(e) {}
+        }
+
+        // Registered Entries Actions
+        let allServerEntries = [];
+        let activeEntrySubtab = "workloads";
+
+        async function loadServerEntries() {
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/entries`);
+                allServerEntries = await res.json();
+                renderEntries();
+            } catch(e) {
+                alert("Failed to load entries.");
+            }
+        }
+
+        function switchEntrySubTab(subtab) {
+            activeEntrySubtab = subtab;
+            document.querySelectorAll('#server-pane-entries .tab').forEach(el => el.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            
+            document.querySelectorAll('#server-pane-entries .tab-content').forEach(el => el.style.display = 'none');
+            document.getElementById(`entry-subtab-${subtab}`).style.display = 'block';
+            renderEntries();
+        }
+
+        function renderEntries() {
+            // Fetch agents from cached list for parents matching
+            let agentsList = [];
+            
+            const workloadsBody = document.querySelector('#entries-table-workloads tbody');
+            const agentsBody = document.querySelector('#entries-table-agents tbody');
+            const downstreamsBody = document.querySelector('#entries-table-downstreams tbody');
+
+            workloadsBody.innerHTML = '';
+            agentsBody.innerHTML = '';
+            downstreamsBody.innerHTML = '';
+
+            let hasW = false, hasA = false, hasD = false;
+
+            allServerEntries.forEach(e => {
+                const isDownstream = e.Original && e.Original.downstream;
+                const isAgent = (e.Parent && (e.Parent.includes('/spire/server') || e.SPIFFEID.includes('/spire/agent/')));
+                
+                const row = `
+                    <tr>
+                        <td style="font-family: monospace; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 400px;">
+                            ${e.SPIFFEID}
+                        </td>
+                        <td style="text-align: right;">
+                            <button class="btn btn-secondary" onclick="showEntryInfo('${e.ID}')">Info</button>
+                            <button class="btn btn-secondary" onclick="openUpdateEntryModal('${e.ID}')">Update</button>
+                            <button class="btn btn-secondary btn-danger" onclick="deleteEntry('${e.ID}')">Delete</button>
+                        </td>
+                    </tr>
+                `;
+
+                if (isDownstream) {
+                    downstreamsBody.innerHTML += row;
+                    hasD = true;
+                } else if (isAgent) {
+                    agentsBody.innerHTML += row;
+                    hasA = true;
+                } else {
+                    workloadsBody.innerHTML += row;
+                    hasW = true;
+                }
+            });
+
+            if (!hasW) workloadsBody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--muted);">No workloads.</td></tr>`;
+            if (!hasA) agentsBody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--muted);">No agents.</td></tr>`;
+            if (!hasD) downstreamsBody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--muted);">No downstream servers.</td></tr>`;
+        }
+
+        async function showEntryInfo(id) {
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/entries/${id}/info`);
+                const e = await res.json();
+                
+                const spiffe = e.spiffeId ? `spiffe://${e.spiffeId.trustDomain}${e.spiffeId.path}` : 'N/A';
+                const parent = e.parentId ? `spiffe://${e.parentId.trustDomain}${e.parentId.path}` : 'N/A';
+                const selectors = (e.selectors || []).map(s => `${s.type}:${s.value}`).join(', ');
+                
+                const text = `ID : ${e.id}\nSPIFFE ID : ${spiffe}\nParent ID : ${parent}\nSelectors : ${selectors}\nDNS Names : ${(e.dnsNames || []).join(', ')}\nTTL : ${e.x509SvidTtl || 0}\nDownstream : ${e.downstream || false}\nAdmin : ${e.admin || false}\nHint : ${e.hint || 'None'}`;
+                
+                document.getElementById('info-modal-title').innerText = "Entry Details";
+                document.getElementById('info-modal-text').innerText = text;
+                openModal('info-modal');
+            } catch (err) {
+                alert("Failed to get entry info.");
+            }
+        }
+
+        function openCreateEntryModal() {
+            document.getElementById('entry-spiffe-id').value = '';
+            document.getElementById('entry-parent-id').value = '';
+            document.getElementById('entry-selectors').value = '';
+            openModal('create-entry-modal');
+        }
+
+        async function submitCreateEntry() {
+            const spiffe = document.getElementById('entry-spiffe-id').value;
+            const parent = document.getElementById('entry-parent-id').value;
+            const selectorsVal = document.getElementById('entry-selectors').value;
+
+            if (!spiffe || !parent || !selectorsVal) {
+                alert("Please fill all entry creation fields.");
+                return;
+            }
+
+            const selectors = selectorsVal.split(',').map(s => s.trim());
+
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/entries`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({spiffe_id: spiffe, parent_id: parent, selectors: selectors})
+                });
+                if (res.ok) {
+                    closeModal('create-entry-modal');
+                    loadServerEntries();
+                } else {
+                    const d = await res.json();
+                    alert(d.error || "Failed");
+                }
+            } catch(e) {}
+        }
+
+        async function openUpdateEntryModal(id) {
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/entries/${id}/info`);
+                const e = await res.json();
+                
+                document.getElementById('update-entry-id').value = e.id;
+                document.getElementById('update-entry-dns').value = (e.dnsNames || []).join(', ');
+                document.getElementById('update-entry-hint').value = e.hint || '';
+                document.getElementById('update-entry-ttl').value = e.x509SvidTtl || '';
+                document.getElementById('update-entry-federates').value = (e.federatesWith || []).join(', ');
+                document.getElementById('update-entry-downstream').checked = e.downstream || false;
+                document.getElementById('update-entry-admin').checked = e.admin || false;
+                
+                openModal('update-entry-modal');
+            } catch(err) {
+                alert("Failed to fetch entry details.");
+            }
+        }
+
+        async function submitUpdateEntry() {
+            const id = document.getElementById('update-entry-id').value;
+            const dns = document.getElementById('update-entry-dns').value.split(',').map(s => s.trim()).filter(Boolean);
+            const hint = document.getElementById('update-entry-hint').value;
+            const ttl = parseInt(document.getElementById('update-entry-ttl').value) || 0;
+            const federates = document.getElementById('update-entry-federates').value.split(',').map(s => s.trim()).filter(Boolean);
+            const downstream = document.getElementById('update-entry-downstream').checked;
+            const admin = document.getElementById('update-entry-admin').checked;
+
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/entries/${id}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        dns_names: dns,
+                        hint: hint,
+                        ttl: ttl,
+                        federates_with: federates,
+                        downstream: downstream,
+                        admin: admin
+                    })
+                });
+                if (res.ok) {
+                    closeModal('update-entry-modal');
+                    loadServerEntries();
+                } else {
+                    const d = await res.json();
+                    alert(d.error || "Failed");
+                }
+            } catch(e) {}
+        }
+
+        async function deleteEntry(id) {
+            if (!confirm(`Are you sure you want to delete entry ${id}?`)) return;
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/entries/${id}`, {
+                    method: 'DELETE'
+                });
+                if (res.ok) {
+                    loadServerEntries();
+                } else {
+                    const d = await res.json();
+                    alert(d.error || "Failed");
+                }
+            } catch (e) {}
+        }
+
+        // Local Authorities Actions
+        async function loadLocalAuthorities() {
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/local-authority`);
+                const data = await res.json();
+                
+                const activeBox = document.getElementById('local-auth-active');
+                const preparedBox = document.getElementById('local-auth-prepared');
+                const oldBox = document.getElementById('local-auth-old');
+
+                const renderState = (state, label) => {
+                    if (!state) return `No ${label.toLowerCase()} X.509 authority found`;
+                    const dateStr = new Date(state.expiresAt * 1000).toUTCString();
+                    let actBtn = '';
+                    if (label === 'Prepared') {
+                        actBtn = `<button class="btn btn-success" style="margin-top: 10px;" onclick="activateLocalAuthority('${state.authorityId}')">Activate</button>`;
+                    } else if (label === 'Old') {
+                        actBtn = `<button class="btn btn-danger" style="margin-top: 10px;" onclick="deleteLocalAuthority('${state.authorityId}')">Delete (Taint + Revoke)</button>`;
+                    }
+                    return `Authority ID         : ${state.authorityId}\nExpires at           : ${dateStr}\nUpstream authority ID: No upstream authority\n${actBtn}`;
+                };
+
+                activeBox.innerHTML = renderState(data.active, "Active");
+                preparedBox.innerHTML = renderState(data.prepared, "Prepared");
+                oldBox.innerHTML = renderState(data.old, "Old");
+
+            } catch(e) {
+                alert("Failed to load local authorities.");
+            }
+        }
+
+        async function rotateLocalAuthority() {
+            if (!confirm("Prepare and activate a new X.509 authority?")) return;
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/local-authority/rotate`, { method: 'POST' });
+                if (res.ok) {
+                    loadLocalAuthorities();
+                } else {
+                    const d = await res.json();
+                    alert(d.error || "Failed");
+                }
+            } catch(e) {}
+        }
+
+        async function activateLocalAuthority(authID) {
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/local-authority/activate`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({authority_id: authID})
+                });
+                if (res.ok) {
+                    loadLocalAuthorities();
+                } else {
+                    const d = await res.json();
+                    alert(d.error || "Failed");
+                }
+            } catch(e) {}
+        }
+
+        async function deleteLocalAuthority(authID) {
+            if (!confirm(`Are you sure you want to taint and revoke old authority ${authID}?`)) return;
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/local-authority/delete`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({authority_id: authID})
+                });
+                if (res.ok) {
+                    loadLocalAuthorities();
+                } else {
+                    const d = await res.json();
+                    alert(d.error || "Failed");
+                }
+            } catch(e) {}
+        }
+
+        // Upstream Authority Actions
+        async function upstreamAction(type) {
+            const skid = document.getElementById('upstream-skid').value;
+            if (!skid) {
+                alert("Please provide Upstream Subject Key ID.");
+                return;
+            }
+            try {
+                const res = await apiFetch(`/api/servers/${activeServerId}/upstream-authority/${type}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({subject_key_id: skid})
+                });
+                if (res.ok) {
+                    alert(`Upstream authority successfully ${type}ed.`);
+                    document.getElementById('upstream-skid').value = '';
+                } else {
+                    const d = await res.json();
+                    alert(d.error || "Failed");
+                }
+            } catch(e) {}
+        }
+
+        // Load Servers initially on dashboard load
+        loadServers();
+    </script>
 </body>
 </html>

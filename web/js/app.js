@@ -1,5 +1,28 @@
+// Shared API, Auth and Theme Logic
 
-// Shared API and Auth Logic
+// Theme Management
+function getTheme() {
+    return localStorage.getItem('spire_theme') || 'Purple';
+}
+
+function setTheme(theme) {
+    localStorage.setItem('spire_theme', theme);
+    applyTheme(theme);
+}
+
+function applyTheme(theme) {
+    const body = document.body;
+    // Remove other theme classes
+    body.classList.remove('theme-purple', 'theme-green', 'theme-blue', 'theme-gray');
+    body.classList.add('theme-' + theme.toLowerCase());
+}
+
+// Initialize theme on page load
+document.addEventListener('DOMContentLoaded', () => {
+    applyTheme(getTheme());
+});
+
+// Authentication
 function getToken() { return localStorage.getItem('spire_token'); }
 function setToken(token) { localStorage.setItem('spire_token', token); }
 function isAdmin() { return localStorage.getItem('spire_admin') === 'true'; }
@@ -8,10 +31,14 @@ function checkAuth() {
     if (!getToken()) {
         window.location.href = 'login.html';
     } else {
-        // Initialize Nav UI based on role
+        // Setup nav UI for admin
         const adminLink = document.getElementById('nav-admin');
-        if (adminLink && isAdmin()) {
-            adminLink.style.display = 'inline-block';
+        if (adminLink) {
+            if (isAdmin()) {
+                adminLink.style.display = 'flex';
+            } else {
+                adminLink.style.display = 'none';
+            }
         }
         setupInactivityTimer();
     }
@@ -40,7 +67,7 @@ function setupInactivityTimer() {
     let timeout;
     const resetTimer = () => {
         clearTimeout(timeout);
-        // Logout after 30 minutes of no mouse/keyboard interaction
+        // Logout after 30 minutes of inactivity
         timeout = setTimeout(logout, 30 * 60 * 1000); 
     };
 

@@ -47,7 +47,8 @@
 
             shellHook = ''
               alias run="go run ."
-              alias build="go build -o spire_admin"
+              alias build-desktop-app="go build ./apps/spire-admin-desktop"
+              alias build-web-app="go build ./apps/spire-admin-web"
               alias fmt="find . -path ./.gopath -prune -o -name '*.go' -exec gofumpt -l -w {} +"
               export GOPATH="$PWD/.gopath"
               echo "Go dev shell activated (via Flake)"
@@ -59,6 +60,13 @@
 
               echo "Tidying up and downloading missing Go modules..."
               go mod tidy
+              echo "================================================"
+              echo "                 SPIRE ADMIN"
+              echo "================================================"
+              echo "Shell commands:"
+              echo "build-desktop-app:   build desktop application"
+              echo "build-web-app:       build web application"
+              echo "================================================"
             '';
           };
         });

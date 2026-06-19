@@ -180,7 +180,6 @@ func ParseSPIFFEID(id string) (*types.SPIFFEID, error) {
 		Path:        path,
 	}, nil
 }
-
 func (s *SpireServer) Connect(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -219,8 +218,7 @@ func (s *SpireServer) Connect(ctx context.Context) error {
 		dialCreds = insecure.NewCredentials()
 	}
 
-	conn, err := grpc.DialContext(
-		ctx,
+	conn, err := grpc.NewClient(
 		target,
 		grpc.WithTransportCredentials(dialCreds),
 	)
@@ -229,14 +227,12 @@ func (s *SpireServer) Connect(ctx context.Context) error {
 			s.source.Close()
 			s.source = nil
 		}
-		err = fmt.Errorf("failed to dial: %w", err)
-		logger.Error("Failed to dial", err)
+
+		logger.Error("failed to creat gRPC client: %w", err)
 		return err
 	}
 
 	s.conn = conn
-	logger.Info("Connected to server")
-
 	return nil
 }
 

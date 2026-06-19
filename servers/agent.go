@@ -231,7 +231,7 @@ func (s *SpireServer) PurgeExpiredAgents(ctx context.Context) error {
 	}
 
 	if len(errs) > 0 {
-		logger.Error("Encountered errors while purging agents", fmt.Errorf(strings.Join(errs, "; ")))
+		logger.Error("Encountered errors while purging agents", fmt.Errorf("%s", strings.Join(errs, "; ")))
 		return fmt.Errorf("encountered errors while purging agents: %s", strings.Join(errs, "; "))
 	}
 

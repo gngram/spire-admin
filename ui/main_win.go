@@ -117,7 +117,7 @@ func (a *SpireAdminApp) UpdateStatus(id int, status servers.ServerHealthStatus) 
 			dLbl = s.domainLbl
 			luLbl = s.lastUpdLbl
 			domain = s.Domain
-			lastUpdated = s.Server.GetLastUpdated().Format("15:04:05")
+			lastUpdated = servers.TimeAgo(s.Server.GetLastUpdated())
 			break
 		}
 	}
@@ -130,7 +130,7 @@ func (a *SpireAdminApp) UpdateStatus(id int, status servers.ServerHealthStatus) 
 				dot.Refresh()
 			}
 			if lbl != nil {
-				lbl.SetText(statusString(status))
+				lbl.SetText(servers.StatusString(status))
 			}
 			if dLbl != nil {
 				dLbl.SetText(domain)
@@ -167,17 +167,6 @@ func (a *SpireAdminApp) Snapshot() []*Server {
 		snap[i] = &cp
 	}
 	return snap
-}
-
-func statusString(s servers.ServerHealthStatus) string {
-	switch s {
-	case servers.Online:
-		return "Online"
-	case servers.Connecting:
-		return "Connecting"
-	default:
-		return "Offline"
-	}
 }
 
 // ════════════════════════════════════════════════════════
@@ -226,7 +215,7 @@ func (c *clickableStack) MouseMoved(_ *desktop.MouseEvent) {}
 
 func showServerInfo(srv *Server, window fyne.Window) {
 	details := fmt.Sprintf("Name : %s\nAddress : %s\nPort : %s\nDomain : %s\nStatus : %s",
-		srv.Name, srv.Server.Address, srv.Server.Port, srv.Server.Domain, statusString(srv.Server.HealthStatus))
+		srv.Name, srv.Server.Address, srv.Server.Port, srv.Server.Domain, servers.StatusString(srv.Server.HealthStatus))
 
 	lines := strings.Split(details, "\n")
 
@@ -310,12 +299,12 @@ func (a *SpireAdminApp) buildServerRow(srv *Server, refresh func()) fyne.CanvasO
 	// ── Status indicator ─────────────────────────────────
 	dot := canvas.NewCircle(statusColor(srv.Status))
 	dotWrap := container.NewCenter(container.New(layout.NewGridWrapLayout(fyne.NewSize(10, 10)), dot))
-	statusLbl := widget.NewLabel(statusString(srv.Status))
+	statusLbl := widget.NewLabel(servers.StatusString(srv.Status))
 	statusLbl.TextStyle = fyne.TextStyle{Bold: true}
 	statusCol := container.NewHBox(dotWrap, statusLbl)
 
 	// ── Last Updates ─────────────────────────────────────
-	lastUpdatedStr := srv.Server.GetLastUpdated().Format("15:04:05")
+	lastUpdatedStr := servers.TimeAgo(srv.Server.GetLastUpdated())
 	lastUpdLbl := widget.NewLabel(lastUpdatedStr)
 
 	refreshBtn := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
