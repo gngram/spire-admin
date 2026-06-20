@@ -1,6 +1,10 @@
 # 🖥️ SPIRE Admin Console (Web & Desktop)
 
-SPIRE Admin Console is a premium, secure administrative interface designed to control, configure, and monitor SPIRE (SPIFFE Runtime Environment) server installations. It provides a visual dashboard for administrators, operating as either a cross-platform desktop application or a remote web-based console.
+SPIRE Admin Console is a secure administrative platform for managing SPIRE (SPIFFE Runtime Environment) deployments. Available as a cross-platform desktop application or a remote web-based console, it provides centralized control and visibility over SPIRE Servers, SPIRE Agents, workload identities, trust authorities, and federation relationships across distributed environments.
+
+The console enables administrators to configure registration entries, monitor agent attestation, inspect issued X.509-SVIDs and JWT-SVIDs, manage trust bundles, and establish workload federation between multiple SPIFFE trust domains. It also provides operational dashboards for server health, connected agents, active workloads, certificate rotation, federation status, and audit events.
+
+By integrating strong authentication (mTLS, SPIFFE identities, or enterprise identity providers) with role-based authorization, the SPIRE Admin Console offers a secure and user-friendly control plane for operating large-scale zero-trust identity infrastructure.
 
 ---
 
