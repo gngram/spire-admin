@@ -210,7 +210,7 @@ func showBundleDetails(s *servers.SpireServer, td string, w fyne.Window) {
 			entry.Disable()
 			content := container.NewStack(canvas.NewRectangle(clrBg), container.NewPadded(entry))
 			d := dialog.NewCustom("Bundle Details: "+td, "Close", content, w)
-			d.Resize(fyne.NewSize(650, 400))
+			d.Resize(fyne.NewSize(750, 480))
 			d.Show()
 		})
 	}()
@@ -365,6 +365,6 @@ func showSetBundleDialog(spireServer *servers.SpireServer, window fyne.Window, r
 		}()
 	}, window)
 
-	d.Resize(fyne.NewSize(700, 500))
+	d.Resize(fyne.NewSize(780, 560))
 	d.Show()
 }

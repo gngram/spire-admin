@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -69,6 +70,7 @@ func run(
 
 	portStr := strconv.Itoa(port)
 	r.Static("/app", "./web")
+	r.StaticFile("/favicon.ico", "./web/favicon.ico")
 
 	r.GET("/", func(c *gin.Context) {
 		c.Redirect(http.StatusFound, "/app/login.html")
@@ -97,6 +99,9 @@ func run(
 
 			// Entries
 			authGroup.GET("/servers/:id/entries", app.handleGetEntries)
+			authGroup.GET("/servers/:id/entries/workloads", app.handleGetWorkloadEntries)
+			authGroup.GET("/servers/:id/entries/agents", app.handleGetAgentEntries)
+			authGroup.GET("/servers/:id/entries/downstreams", app.handleGetDownstreamEntries)
 			authGroup.GET("/servers/:id/entries/:entry_id/info", app.handleGetEntryInfo)
 			authGroup.POST("/servers/:id/entries", app.handleCreateEntry)
 			authGroup.PUT("/servers/:id/entries/:entry_id", app.handleUpdateEntry)
@@ -115,6 +120,7 @@ func run(
 			authGroup.PUT("/servers/:id/federations", app.handleUpdateFederation)
 			authGroup.POST("/servers/:id/federations/refresh", app.handleRefreshFederation)
 			authGroup.DELETE("/servers/:id/federations", app.handleDeleteFederation)
+			authGroup.POST("/servers/:id/federations/internal", app.handleFederateInternalServer)
 
 			// Local Authority
 			authGroup.GET("/servers/:id/local-authority", app.handleGetLocalAuthority)
@@ -127,6 +133,7 @@ func run(
 			authGroup.POST("/servers/:id/upstream-authority/revoke", app.handleRevokeUpstreamAuthority)
 
 			authGroup.POST("/change-password", app.Auth.HandleChangePassword)
+			authGroup.POST("/logout", app.Auth.HandleLogout)
 			authGroup.POST("/users", app.Auth.AdminMiddleware(), app.Auth.HandleCreateUser)
 		}
 	}
@@ -250,12 +257,12 @@ func (a *WebApp) handleGetAgentInfo(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	info, err := srv.GetAgentInfo(ctx, spiffeID)
+	agentInfo, err := srv.GetAgentInfo(ctx, spiffeID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"info": info})
+	c.JSON(http.StatusOK, gin.H{"info": agentInfo})
 }
 
 func (a *WebApp) handleEvictAgent(c *gin.Context) {
@@ -343,6 +350,63 @@ func (a *WebApp) handleGetEntries(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, entries)
+}
+
+func (a *WebApp) handleGetWorkloadEntries(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	a.mu.RLock()
+	srv, exists := a.servers[id]
+	a.mu.RUnlock()
+	if !exists {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := srv.ListEntries(ctx, true)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, srv.GetWorkloadsEntries())
+}
+
+func (a *WebApp) handleGetAgentEntries(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	a.mu.RLock()
+	srv, exists := a.servers[id]
+	a.mu.RUnlock()
+	if !exists {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := srv.ListEntries(ctx, true)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, srv.GetAgentsEntries())
+}
+
+func (a *WebApp) handleGetDownstreamEntries(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	a.mu.RLock()
+	srv, exists := a.servers[id]
+	a.mu.RUnlock()
+	if !exists {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := srv.ListEntries(ctx, true)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, srv.GetDownstreamsEntries())
 }
 
 func (a *WebApp) handleGetEntryInfo(c *gin.Context) {
@@ -638,8 +702,10 @@ func (a *WebApp) handleGetFederationInfo(c *gin.Context) {
 func (a *WebApp) handleCreateFederation(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	var req struct {
-		TrustDomain string `json:"trust_domain"`
-		EndpointURL string `json:"endpoint_url"`
+		TrustDomain      string `json:"trust_domain"`
+		EndpointURL      string `json:"endpoint_url"`
+		ProfileType      string `json:"profile_type"`
+		EndpointSpiffeID string `json:"endpoint_spiffe_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -655,6 +721,17 @@ func (a *WebApp) handleCreateFederation(c *gin.Context) {
 	rel := &types.FederationRelationship{
 		TrustDomain:       req.TrustDomain,
 		BundleEndpointUrl: req.EndpointURL,
+	}
+	if req.ProfileType == "spiffe" || req.ProfileType == "HTTPS SPIFFE" {
+		rel.BundleEndpointProfile = &types.FederationRelationship_HttpsSpiffe{
+			HttpsSpiffe: &types.HTTPSSPIFFEProfile{
+				EndpointSpiffeId: req.EndpointSpiffeID,
+			},
+		}
+	} else {
+		rel.BundleEndpointProfile = &types.FederationRelationship_HttpsWeb{
+			HttpsWeb: &types.HTTPSWebProfile{},
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -669,8 +746,10 @@ func (a *WebApp) handleCreateFederation(c *gin.Context) {
 func (a *WebApp) handleUpdateFederation(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	var req struct {
-		TrustDomain string `json:"trust_domain"`
-		EndpointURL string `json:"endpoint_url"`
+		TrustDomain      string `json:"trust_domain"`
+		EndpointURL      string `json:"endpoint_url"`
+		ProfileType      string `json:"profile_type"`
+		EndpointSpiffeID string `json:"endpoint_spiffe_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -687,6 +766,17 @@ func (a *WebApp) handleUpdateFederation(c *gin.Context) {
 		TrustDomain:       req.TrustDomain,
 		BundleEndpointUrl: req.EndpointURL,
 	}
+	if req.ProfileType == "spiffe" || req.ProfileType == "HTTPS SPIFFE" {
+		rel.BundleEndpointProfile = &types.FederationRelationship_HttpsSpiffe{
+			HttpsSpiffe: &types.HTTPSSPIFFEProfile{
+				EndpointSpiffeId: req.EndpointSpiffeID,
+			},
+		}
+	} else {
+		rel.BundleEndpointProfile = &types.FederationRelationship_HttpsWeb{
+			HttpsWeb: &types.HTTPSWebProfile{},
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	updated, err := srv.UpdateFederationRelationship(ctx, rel, nil)
@@ -695,6 +785,71 @@ func (a *WebApp) handleUpdateFederation(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, updated)
+}
+
+func (a *WebApp) handleFederateInternalServer(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	var req struct {
+		TargetServerID int `json:"target_server_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	a.mu.RLock()
+	srvX, existsX := a.servers[id]
+	srvY, existsY := a.servers[req.TargetServerID]
+	a.mu.RUnlock()
+
+	if !existsX {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Current server not found"})
+		return
+	}
+	if !existsY {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Target server not found"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	// 1. Pull bundle from target server Y
+	bundle, err := srvY.GetBundle(ctx, "")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to pull target bundle: " + err.Error()})
+		return
+	}
+
+	// 2. Push bundle to current server X
+	_, err = srvX.SetFederatedBundle(ctx, bundle)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to push bundle to current server: " + err.Error()})
+		return
+	}
+
+	// 3. Create federation relationship on current server X pointing to target Y
+	portInt, _ := strconv.Atoi(srvY.Port)
+	bundlePort := portInt + 364
+	endpointURL := fmt.Sprintf("https://%s:%d", srvY.Address, bundlePort)
+	spiffeID := fmt.Sprintf("spiffe://%s/spire/server", srvY.Domain)
+
+	rel := &types.FederationRelationship{
+		TrustDomain:       srvY.Domain,
+		BundleEndpointUrl: endpointURL,
+		BundleEndpointProfile: &types.FederationRelationship_HttpsSpiffe{
+			HttpsSpiffe: &types.HTTPSSPIFFEProfile{
+				EndpointSpiffeId: spiffeID,
+			},
+		},
+	}
+
+	created, err := srvX.CreateFederationRelationship(ctx, rel)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create federation relationship: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, created)
 }
 
 func (a *WebApp) handleRefreshFederation(c *gin.Context) {
@@ -780,6 +935,7 @@ func (a *WebApp) handleRotateLocalAuthority(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	fmt.Printf("Prepared local authority: %v\n", resp)
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -801,6 +957,7 @@ func (a *WebApp) handleActivateLocalAuthority(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	fmt.Printf("Activating local authority %s\n", req.AuthorityID)
 	resp, err := srv.ActivateLocalX509Authority(ctx, req.AuthorityID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

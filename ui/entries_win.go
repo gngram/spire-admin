@@ -111,29 +111,9 @@ func buildEntriesContent(spireServer *servers.SpireServer, window fyne.Window) f
 	var workloads, agents, downstreams []servers.Entry
 
 	filterEntries := func() {
-		workloads = nil
-		agents = nil
-		downstreams = nil
-		for _, e := range spireServer.Entries {
-			if e.Original != nil && e.Original.Downstream {
-				downstreams = append(downstreams, e)
-				continue
-			}
-
-			isAgent := false
-			for _, a := range spireServer.Agents {
-				if e.Parent == a.SPIFFEID {
-					isAgent = true
-					break
-				}
-			}
-
-			if isAgent || strings.Contains(e.Parent, "/spire/server") || strings.Contains(e.SPIFFEID, "/spire/agent/") {
-				agents = append(agents, e)
-			} else {
-				workloads = append(workloads, e)
-			}
-		}
+		workloads = spireServer.GetWorkloadsEntries()
+		agents = spireServer.GetAgentsEntries()
+		downstreams = spireServer.GetDownstreamsEntries()
 	}
 	filterEntries()
 
@@ -313,10 +293,10 @@ func showEntryInfo(spireServer *servers.SpireServer, entryID string, window fyne
 			entry.Disable()
 
 			bgRect := canvas.NewRectangle(clrBg)
-			backgroundContainer := container.NewStack(bgRect, entry)
+			backgroundContainer := container.NewStack(bgRect, container.NewPadded(entry))
 
 			d := dialog.NewCustom("Entry Details", "Close", backgroundContainer, window)
-			d.Resize(fyne.NewSize(600, 300))
+			d.Resize(fyne.NewSize(700, 380))
 			d.Show()
 		})
 	}()
@@ -401,7 +381,7 @@ func showCreateEntryDialog(spireServer *servers.SpireServer, window fyne.Window,
 			}
 		}()
 	}, window)
-	d.Resize(fyne.NewSize(700, 350))
+	d.Resize(fyne.NewSize(780, 420))
 	d.Show()
 }
 
@@ -502,7 +482,7 @@ func showUpdateEntryDialog(spireServer *servers.SpireServer, entryID string, win
 					}
 				}()
 			}, window)
-			d.Resize(fyne.NewSize(700, 450))
+			d.Resize(fyne.NewSize(780, 520))
 			d.Show()
 		})
 	}()

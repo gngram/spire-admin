@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"image/color"
+	"strconv"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -79,7 +80,7 @@ func (r *federationRowWidget) CreateRenderer() fyne.WidgetRenderer {
 	return widget.NewSimpleRenderer(r.container)
 }
 
-func buildFederationContent(spireServer *servers.SpireServer, window fyne.Window) fyne.CanvasObject {
+func buildFederationContent(spireServer *servers.SpireServer, window fyne.Window, allServers func() []*servers.SpireServer) fyne.CanvasObject {
 	title := canvas.NewText("Federation Relationships", clrText)
 	title.TextSize = 22
 	title.TextStyle = fyne.TextStyle{Bold: true}
@@ -122,17 +123,35 @@ func buildFederationContent(spireServer *servers.SpireServer, window fyne.Window
 						fyne.Do(func() { dialog.ShowError(err, window) })
 						return
 					}
-					details := fmt.Sprintf("Trust Domain: %s\nBundle Endpoint: %s\nSPIFFE ID: %s",
-						rel.TrustDomain, rel.BundleEndpointUrl, rel.BundleEndpointProfile)
+					
+					profileType := "Unknown"
+					spiffeID := "N/A"
+					if rel.GetHttpsSpiffe() != nil {
+						profileType = "HTTPS SPIFFE"
+						spiffeID = rel.GetHttpsSpiffe().EndpointSpiffeId
+					} else if rel.GetHttpsWeb() != nil {
+						profileType = "HTTPS Web"
+					}
+
+					details := fmt.Sprintf("Trust Domain: %s\nBundle Endpoint: %s\nProfile Type: %s\nSPIFFE ID: %s",
+						rel.TrustDomain, rel.BundleEndpointUrl, profileType, spiffeID)
 					fyne.Do(func() { dialog.ShowInformation("Federation Info", details, window) })
 				}()
 			}
 
 			row.updateBtn.onTap = func() {
-				showFederationDialog(spireServer, window, refreshData, &types.FederationRelationship{
-					TrustDomain:       f.TrustDomain,
-					BundleEndpointUrl: f.Address,
-				})
+				go func() {
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					rel, err := spireServer.GetFederationRelationship(ctx, row.trustDomain)
+					if err != nil {
+						fyne.Do(func() { dialog.ShowError(err, window) })
+						return
+					}
+					fyne.Do(func() {
+						showFederationDialog(spireServer, window, refreshData, rel)
+					})
+				}()
 			}
 
 			row.refreshBtn.onTap = func() {
@@ -165,10 +184,10 @@ func buildFederationContent(spireServer *servers.SpireServer, window fyne.Window
 	)
 
 	newBtn := widget.NewButtonWithIcon("New", theme.ContentAddIcon(), func() {
-		showFederationDialog(spireServer, window, refreshData, nil)
+		showNewFederationDialog(spireServer, window, refreshData, allServers)
 	})
 
-	topBar := container.NewBorder(nil, nil, titleBlock, container.NewHBox(newBtn))
+	topBar := container.NewBorder(nil, nil, titleBlock, newBtn)
 
 	bg := canvas.NewRectangle(clrCard)
 	bg.CornerRadius = 8
@@ -188,45 +207,259 @@ func buildFederationContent(spireServer *servers.SpireServer, window fyne.Window
 	)
 }
 
-func showFederationDialog(spireServer *servers.SpireServer, window fyne.Window, refreshData func(), existing *types.FederationRelationship) {
-	title := "New Federation"
-	if existing != nil {
-		title = "Update Federation"
+func showNewFederationDialog(spireServer *servers.SpireServer, window fyne.Window, refreshData func(), allServers func() []*servers.SpireServer) {
+	// Create the Internal Tab Content
+	eligibleServers := []*servers.SpireServer{}
+	eligibleNames := []string{}
+	currentDomain := spireServer.Domain
+
+	alreadyFederated := make(map[string]bool)
+	for _, f := range spireServer.FederatedServers {
+		alreadyFederated[f.TrustDomain] = true
 	}
 
-	domainEntry := widget.NewEntry()
-	if existing != nil {
-		domainEntry.SetText(existing.TrustDomain)
-		domainEntry.Disable()
+	if allServers != nil {
+		for _, srv := range allServers() {
+			if srv.Domain == "" || srv.Domain == "Unknown" || srv.Domain == currentDomain {
+				continue
+			}
+			if alreadyFederated[srv.Domain] {
+				continue
+			}
+			eligibleServers = append(eligibleServers, srv)
+			eligibleNames = append(eligibleNames, fmt.Sprintf("%s (%s)", srv.Nickname, srv.Domain))
+		}
 	}
+
+	var internalContent fyne.CanvasObject
+	var srvSelect *widget.Select
+	if len(eligibleServers) == 0 {
+		internalContent = container.NewPadded(widget.NewLabel("No other eligible internal servers found."))
+	} else {
+		srvSelect = widget.NewSelect(eligibleNames, nil)
+		srvSelect.SetSelected(eligibleNames[0])
+		internalForm := widget.NewForm(
+			widget.NewFormItem("Select Server", srvSelect),
+		)
+		internalContent = container.NewPadded(internalForm)
+	}
+
+	// Create the External Tab Content
+	domainEntry := widget.NewEntry()
+	domainEntry.SetPlaceHolder("example.org")
 	urlEntry := widget.NewEntry()
-	if existing != nil {
-		urlEntry.SetText(existing.BundleEndpointUrl)
+	urlEntry.SetPlaceHolder("https://endpoint-url:port")
+	profileSelect := widget.NewSelect([]string{"HTTPS SPIFFE", "HTTPS Web"}, nil)
+	spiffeIDEntry := widget.NewEntry()
+	spiffeIDEntry.SetPlaceHolder("spiffe://example.org/spire/server")
+
+	profileSelect.OnChanged = func(val string) {
+		if val == "HTTPS SPIFFE" {
+			spiffeIDEntry.Enable()
+		} else {
+			spiffeIDEntry.Disable()
+		}
+	}
+	profileSelect.SetSelected("HTTPS SPIFFE")
+
+	externalForm := widget.NewForm(
+		widget.NewFormItem("Trust Domain", domainEntry),
+		widget.NewFormItem("Endpoint URL", urlEntry),
+		widget.NewFormItem("Profile Type", profileSelect),
+		widget.NewFormItem("Endpoint SPIFFE ID", spiffeIDEntry),
+	)
+	externalContent := container.NewPadded(externalForm)
+
+	// Create AppTabs
+	tabs := container.NewAppTabs(
+		container.NewTabItem("Internal Server", internalContent),
+		container.NewTabItem("External Domain", externalContent),
+	)
+
+	// Wrap in a padded container to ensure gap from the border
+	dialogContent := container.NewPadded(tabs)
+
+	d := dialog.NewCustomConfirm("New Federation", "Save", "Cancel", dialogContent, func(ok bool) {
+		if !ok {
+			return
+		}
+		// Based on selected tab, execute internal or external federation
+		if tabs.SelectedIndex() == 0 {
+			// Internal
+			if len(eligibleServers) == 0 {
+				dialog.ShowError(fmt.Errorf("No internal server selected"), window)
+				return
+			}
+			selectedIdx := -1
+			for idx, name := range eligibleNames {
+				if name == srvSelect.Selected {
+					selectedIdx = idx
+					break
+				}
+			}
+			if selectedIdx == -1 {
+				return
+			}
+			targetSrv := eligibleServers[selectedIdx]
+
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+				defer cancel()
+
+				// 1. Pull bundle from target server
+				bundle, err := targetSrv.GetBundle(ctx, "")
+				if err != nil {
+					fyne.Do(func() { dialog.ShowError(fmt.Errorf("failed to pull bundle: %v", err), window) })
+					return
+				}
+
+				// 2. Push bundle to current server
+				_, err = spireServer.SetFederatedBundle(ctx, bundle)
+				if err != nil {
+					fyne.Do(func() { dialog.ShowError(fmt.Errorf("failed to push bundle: %v", err), window) })
+					return
+				}
+
+				// 3. Create federation relationship
+				portInt, _ := strconv.Atoi(targetSrv.Port)
+				bundlePort := portInt + 364
+				endpointURL := fmt.Sprintf("https://%s:%d", targetSrv.Address, bundlePort)
+				spiffeID := fmt.Sprintf("spiffe://%s/spire/server", targetSrv.Domain)
+
+				rel := &types.FederationRelationship{
+					TrustDomain:       targetSrv.Domain,
+					BundleEndpointUrl: endpointURL,
+					BundleEndpointProfile: &types.FederationRelationship_HttpsSpiffe{
+						HttpsSpiffe: &types.HTTPSSPIFFEProfile{
+							EndpointSpiffeId: spiffeID,
+						},
+					},
+				}
+
+				_, err = spireServer.CreateFederationRelationship(ctx, rel)
+				if err != nil {
+					fyne.Do(func() { dialog.ShowError(fmt.Errorf("failed to create federation relationship: %v", err), window) })
+					return
+				}
+
+				fyne.Do(func() {
+					dialog.ShowInformation("Success", fmt.Sprintf("Successfully federated with %s!", targetSrv.Nickname), window)
+					refreshData()
+				})
+			}()
+		} else {
+			// External
+			if domainEntry.Text == "" || urlEntry.Text == "" {
+				dialog.ShowError(fmt.Errorf("Trust Domain and Endpoint URL are required"), window)
+				return
+			}
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+
+				rel := &types.FederationRelationship{
+					TrustDomain:       domainEntry.Text,
+					BundleEndpointUrl: urlEntry.Text,
+				}
+
+				if profileSelect.Selected == "HTTPS SPIFFE" {
+					rel.BundleEndpointProfile = &types.FederationRelationship_HttpsSpiffe{
+						HttpsSpiffe: &types.HTTPSSPIFFEProfile{
+							EndpointSpiffeId: spiffeIDEntry.Text,
+						},
+					}
+				} else {
+					rel.BundleEndpointProfile = &types.FederationRelationship_HttpsWeb{
+						HttpsWeb: &types.HTTPSWebProfile{},
+					}
+				}
+
+				_, err := spireServer.CreateFederationRelationship(ctx, rel)
+				if err != nil {
+					fyne.Do(func() { dialog.ShowError(err, window) })
+				}
+				refreshData()
+			}()
+		}
+	}, window)
+
+	d.Resize(fyne.NewSize(600, 450))
+	d.Show()
+}
+
+func showFederationDialog(spireServer *servers.SpireServer, window fyne.Window, refreshData func(), existing *types.FederationRelationship) {
+	title := "Update Federation"
+
+	domainEntry := widget.NewEntry()
+	domainEntry.SetText(existing.TrustDomain)
+	domainEntry.Disable()
+
+	urlEntry := widget.NewEntry()
+	urlEntry.SetText(existing.BundleEndpointUrl)
+
+	profileSelect := widget.NewSelect([]string{"HTTPS SPIFFE", "HTTPS Web"}, nil)
+	spiffeIDEntry := widget.NewEntry()
+	spiffeIDEntry.SetPlaceHolder("spiffe://example.org/spire/server")
+
+	profileSelect.OnChanged = func(val string) {
+		if val == "HTTPS SPIFFE" {
+			spiffeIDEntry.Enable()
+		} else {
+			spiffeIDEntry.Disable()
+		}
+	}
+
+	if existing.GetHttpsSpiffe() != nil {
+		profileSelect.SetSelected("HTTPS SPIFFE")
+		spiffeIDEntry.SetText(existing.GetHttpsSpiffe().EndpointSpiffeId)
+	} else {
+		profileSelect.SetSelected("HTTPS Web")
+		spiffeIDEntry.Disable()
 	}
 
 	items := []*widget.FormItem{
 		widget.NewFormItem("Trust Domain", domainEntry),
 		widget.NewFormItem("Endpoint URL", urlEntry),
+		widget.NewFormItem("Profile Type", profileSelect),
+		widget.NewFormItem("Endpoint SPIFFE ID", spiffeIDEntry),
 	}
 
-	dialog.ShowForm(title, "Save", "Cancel", items, func(ok bool) {
+	form := widget.NewForm(items...)
+	dialogContent := container.NewPadded(form)
+
+	d := dialog.NewCustomConfirm(title, "Save", "Cancel", dialogContent, func(ok bool) {
 		if !ok {
 			return
 		}
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			rel := &types.FederationRelationship{TrustDomain: domainEntry.Text, BundleEndpointUrl: urlEntry.Text}
-			var err error
-			if existing == nil {
-				_, err = spireServer.CreateFederationRelationship(ctx, rel)
-			} else {
-				_, err = spireServer.UpdateFederationRelationship(ctx, rel, nil)
+
+			rel := &types.FederationRelationship{
+				TrustDomain:       domainEntry.Text,
+				BundleEndpointUrl: urlEntry.Text,
 			}
+
+			if profileSelect.Selected == "HTTPS SPIFFE" {
+				rel.BundleEndpointProfile = &types.FederationRelationship_HttpsSpiffe{
+					HttpsSpiffe: &types.HTTPSSPIFFEProfile{
+						EndpointSpiffeId: spiffeIDEntry.Text,
+					},
+				}
+			} else {
+				rel.BundleEndpointProfile = &types.FederationRelationship_HttpsWeb{
+					HttpsWeb: &types.HTTPSWebProfile{},
+				}
+			}
+
+			_, err := spireServer.UpdateFederationRelationship(ctx, rel, nil)
 			if err != nil {
 				fyne.Do(func() { dialog.ShowError(err, window) })
 			}
 			refreshData()
 		}()
 	}, window)
+
+	d.Resize(fyne.NewSize(600, 400))
+	d.Show()
 }

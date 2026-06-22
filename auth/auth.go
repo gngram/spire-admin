@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -108,6 +109,19 @@ func (m *Manager) HandleLogin(c *gin.Context) {
 		return
 	}
 
+	// Terminate any old active sessions for this username
+	m.lastActivity.Range(func(key, value interface{}) bool {
+		tokenStr := key.(string)
+		claims := &Claims{}
+		token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+			return m.jwtSigningKey, nil
+		})
+		if err == nil && token.Valid && claims.Username == req.Username {
+			m.lastActivity.Delete(tokenStr)
+		}
+		return true
+	})
+
 	m.issueToken(c, user)
 }
 
@@ -183,6 +197,17 @@ func (m *Manager) HandleChangePassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "password updated"})
 }
 
+func (m *Manager) HandleLogout(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid authorization header"})
+		return
+	}
+	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+	m.lastActivity.Delete(tokenStr)
+	c.JSON(http.StatusOK, gin.H{"status": "logged out"})
+}
+
 func (m *Manager) AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -202,12 +227,16 @@ func (m *Manager) AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		if lastSeen, ok := m.lastActivity.Load(tokenStr); ok {
-			if time.Since(lastSeen.(time.Time)) > m.SessionTimeout {
-				m.lastActivity.Delete(tokenStr)
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Session expired due to inactivity"})
-				return
-			}
+		lastSeen, ok := m.lastActivity.Load(tokenStr)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized or session terminated"})
+			return
+		}
+
+		if time.Since(lastSeen.(time.Time)) > m.SessionTimeout {
+			m.lastActivity.Delete(tokenStr)
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Session expired due to inactivity"})
+			return
 		}
 		m.lastActivity.Store(tokenStr, time.Now())
 
@@ -236,6 +265,7 @@ func (m *Manager) issueToken(c *gin.Context, user *User) {
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(12 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ID:        strconv.FormatInt(time.Now().UnixNano(), 10),
 		},
 	}
 

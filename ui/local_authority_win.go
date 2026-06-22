@@ -108,7 +108,7 @@ func showAuthorityInfo(label string, state *localauthorityv1.AuthorityState, w f
 	backgroundContainer := container.NewStack(bgRect, container.NewPadded(entry))
 
 	d := dialog.NewCustom(label+" Authority Details", "Close", backgroundContainer, w)
-	d.Resize(fyne.NewSize(550, 180))
+	d.Resize(fyne.NewSize(650, 260))
 	d.Show()
 }
 

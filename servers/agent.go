@@ -20,6 +20,7 @@ type Agent struct {
 	SerialNumber    string
 	CanReattest     bool
 	AgentVersion    string
+	Banned          bool
 }
 
 // String returns the agent info in a formatted string.
@@ -33,8 +34,9 @@ func (a Agent) String() string {
 		"Expiration time   : %s\n"+
 		"Serial number     : %s\n"+
 		"Can re-attest     : %t\n"+
-		"Agent version     : %s",
-		a.SPIFFEID, a.AttestationType, expiration, a.SerialNumber, a.CanReattest, a.AgentVersion)
+		"Agent version     : %s\n"+
+		"Banned            : %t",
+		a.SPIFFEID, a.AttestationType, expiration, a.SerialNumber, a.CanReattest, a.AgentVersion, a.Banned)
 }
 
 // ListAgents lists all agents connected to the SPIRE server.
@@ -79,6 +81,7 @@ func (s *SpireServer) ListAgents(ctx context.Context, pull bool) ([]Agent, error
 				SerialNumber:    a.X509SvidSerialNumber,
 				CanReattest:     a.CanReattest,
 				AgentVersion:    a.AgentVersion,
+				Banned:          a.Banned,
 			})
 		}
 
@@ -152,23 +155,23 @@ func (s *SpireServer) EvictAgent(ctx context.Context, spiffeID string) error {
 }
 
 // GetAgentInfo returns the details of the agent with the given SPIFFE ID.
-func (s *SpireServer) GetAgentInfo(ctx context.Context, spiffeID string) (string, error) {
+func (s *SpireServer) GetAgentInfo(ctx context.Context, spiffeID string) (Agent, error) {
 	if err := s.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
-		return "", err
+		return Agent{}, err
 	}
 
 	id, err := ParseSPIFFEID(spiffeID)
 	if err != nil {
 		logger.Error("Parse SPIFFE ID error", err)
-		return "", err
+		return Agent{}, err
 	}
 
 	client := agentv1.NewAgentClient(s.conn)
 	resp, err := client.GetAgent(ctx, &agentv1.GetAgentRequest{Id: id})
 	if err != nil {
 		logger.Error("Failed to get agent details", err)
-		return "", err
+		return Agent{}, err
 	}
 
 	agent := Agent{
@@ -178,9 +181,10 @@ func (s *SpireServer) GetAgentInfo(ctx context.Context, spiffeID string) (string
 		SerialNumber:    resp.X509SvidSerialNumber,
 		CanReattest:     resp.CanReattest,
 		AgentVersion:    resp.AgentVersion,
+		Banned:          resp.Banned,
 	}
 
-	return agent.String(), nil
+	return agent, nil
 }
 
 // PurgeExpiredAgents evicts all agents that have expired.

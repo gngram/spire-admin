@@ -3,6 +3,7 @@ package servers
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/gngram/spire_admin/logger"
 	entryv1 "github.com/spiffe/spire-api-sdk/proto/spire/api/server/entry/v1"
@@ -197,4 +198,72 @@ func (s *SpireServer) UpdateEntry(ctx context.Context, entry *types.Entry) (*typ
 	err = fmt.Errorf("unexpected empty response from server")
 	logger.Error("Update entry empty response", err)
 	return nil, err
+}
+
+// GetAgentsEntries returns all entries classified as agent entries.
+func (s *SpireServer) GetAgentsEntries() []Entry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var agents []Entry
+	for _, e := range s.Entries {
+		if e.Original != nil && e.Original.Downstream {
+			continue
+		}
+
+		isAgent := false
+		for _, a := range s.Agents {
+			if e.Parent == a.SPIFFEID {
+				isAgent = true
+				break
+			}
+		}
+
+		if isAgent || strings.Contains(e.Parent, "/spire/server") || strings.Contains(e.SPIFFEID, "/spire/agent/") {
+			agents = append(agents, e)
+		}
+	}
+	return agents
+}
+
+// GetWorkloadsEntries returns all entries classified as workload entries.
+func (s *SpireServer) GetWorkloadsEntries() []Entry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var workloads []Entry
+	for _, e := range s.Entries {
+		if e.Original != nil && e.Original.Downstream {
+			continue
+		}
+
+		isAgent := false
+		for _, a := range s.Agents {
+			if e.Parent == a.SPIFFEID {
+				isAgent = true
+				break
+			}
+		}
+
+		if isAgent || strings.Contains(e.Parent, "/spire/server") || strings.Contains(e.SPIFFEID, "/spire/agent/") {
+			continue
+		}
+
+		workloads = append(workloads, e)
+	}
+	return workloads
+}
+
+// GetDownstreamsEntries returns all entries classified as downstream entries.
+func (s *SpireServer) GetDownstreamsEntries() []Entry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var downstreams []Entry
+	for _, e := range s.Entries {
+		if e.Original != nil && e.Original.Downstream {
+			downstreams = append(downstreams, e)
+		}
+	}
+	return downstreams
 }

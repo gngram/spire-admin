@@ -255,10 +255,10 @@ func showServerInfo(srv *Server, window fyne.Window) {
 	entry.Disable()
 
 	bgRect := canvas.NewRectangle(clrBg)
-	backgroundContainer := container.New(layout.NewMaxLayout(), bgRect, entry)
+	backgroundContainer := container.New(layout.NewMaxLayout(), bgRect, container.NewPadded(entry))
 
 	d := dialog.NewCustom("Server Details", "Close", backgroundContainer, window)
-	d.Resize(fyne.NewSize(400, 250))
+	d.Resize(fyne.NewSize(500, 340))
 	d.Show()
 }
 
@@ -273,7 +273,14 @@ func (a *SpireAdminApp) buildServerRow(srv *Server, refresh func()) fyne.CanvasO
 		container.New(layout.NewGridWrapLayout(fyne.NewSize(32, 32)), iconBg),
 		container.NewCenter(iconLbl),
 	), func() {
-		ShowServerWindow(srv.Server, srv.Name, a.windowWidth, a.windowHeight)
+		ShowServerWindow(srv.Server, srv.Name, a.windowWidth, a.windowHeight, func() []*servers.SpireServer {
+			snap := a.Snapshot()
+			res := make([]*servers.SpireServer, len(snap))
+			for i, s := range snap {
+				res[i] = s.Server
+			}
+			return res
+		})
 	})
 
 	iconChip.onHoverIn = func() {
@@ -304,7 +311,8 @@ func (a *SpireAdminApp) buildServerRow(srv *Server, refresh func()) fyne.CanvasO
 	statusCol := container.NewHBox(dotWrap, statusLbl)
 
 	// ── Last Updates ─────────────────────────────────────
-	lastUpdatedStr := servers.TimeAgo(srv.Server.GetLastUpdated())
+	lastUpdated := srv.Server.GetLastUpdated()
+	lastUpdatedStr := lastUpdated.Format("2006-01-02 15:04:05")
 	lastUpdLbl := widget.NewLabel(lastUpdatedStr)
 
 	refreshBtn := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
@@ -433,7 +441,7 @@ func (a *SpireAdminApp) showAddServerDialog(refresh func()) {
 		}
 		refresh()
 	}, a.window)
-	d.Resize(fyne.NewSize(300, 200))
+	d.Resize(fyne.NewSize(450, 320))
 	d.Show()
 }
 

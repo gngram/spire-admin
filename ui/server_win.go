@@ -13,7 +13,7 @@ import (
 	"github.com/gngram/spire_admin/servers"
 )
 
-func ShowServerWindow(spireServer *servers.SpireServer, name string, width uint16, height uint16) {
+func ShowServerWindow(spireServer *servers.SpireServer, name string, width uint16, height uint16, allServers func() []*servers.SpireServer) {
 	title := "Server Details"
 	if spireServer != nil {
 		title = "Server: " + name
@@ -32,7 +32,7 @@ func ShowServerWindow(spireServer *servers.SpireServer, name string, width uint1
 	agentPane := buildAgentsContent(spireServer, aw)
 	entriesPane := buildEntriesContent(spireServer, aw)
 	bundlePane := buildBundlesContent(spireServer, aw)
-	federationPane := buildFederationContent(spireServer, aw)
+	federationPane := buildFederationContent(spireServer, aw, allServers)
 	localAuthorityPane := buildLocalAuthorityContent(spireServer, aw)
 	upstreamAuthorityPane := buildUpstreamAuthorityContent(spireServer, aw)
 

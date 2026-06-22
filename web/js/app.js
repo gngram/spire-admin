@@ -23,9 +23,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Authentication
-function getToken() { return localStorage.getItem('spire_token'); }
-function setToken(token) { localStorage.setItem('spire_token', token); }
-function isAdmin() { return localStorage.getItem('spire_admin') === 'true'; }
+function getToken() { return sessionStorage.getItem('spire_token'); }
+function setToken(token) { sessionStorage.setItem('spire_token', token); }
+function isAdmin() { return sessionStorage.getItem('spire_admin') === 'true'; }
 
 function checkAuth() {
     if (!getToken()) {
@@ -44,9 +44,22 @@ function checkAuth() {
     }
 }
 
-function logout() {
-    localStorage.removeItem('spire_token');
-    localStorage.removeItem('spire_admin');
+async function logout() {
+    const token = getToken();
+    if (token) {
+        try {
+            await fetch('/api/logout', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                }
+            });
+        } catch (e) {
+            console.error("Logout request failed:", e);
+        }
+    }
+    sessionStorage.removeItem('spire_token');
+    sessionStorage.removeItem('spire_admin');
     window.location.href = 'login.html';
 }
 
@@ -68,7 +81,7 @@ function setupInactivityTimer() {
     const resetTimer = () => {
         clearTimeout(timeout);
         // Logout after 30 minutes of inactivity
-        timeout = setTimeout(logout, 30 * 60 * 1000); 
+        timeout = setTimeout(logout, 30 * 60 * 1000);
     };
 
     window.onload = resetTimer;

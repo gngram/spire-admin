@@ -2,6 +2,7 @@
 <html>
 <head>
     <title>Login - SPIRE Admin</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body style="display: flex; align-items: center; justify-content: center; height: 100vh;">
@@ -27,7 +28,7 @@
             const data = await res.json();
             if (res.ok) {
                 setToken(data.token);
-                localStorage.setItem('spire_admin', data.is_admin);
+                sessionStorage.setItem('spire_admin', data.is_admin);
                 window.location.href = 'dashboard.html';
             } else {
                 document.getElementById('err').innerText = data.error;

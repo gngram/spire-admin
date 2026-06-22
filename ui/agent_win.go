@@ -26,6 +26,7 @@ type agentRowWidget struct {
 	banBtn      *clickableStack
 	container   *fyne.Container
 	spiffeID    string
+	bg          *canvas.Rectangle
 }
 
 func newAgentRowWidget() *agentRowWidget {
@@ -73,7 +74,13 @@ func newAgentRowWidget() *agentRowWidget {
 
 	content := container.NewBorder(nil, nil, nil, actionGroup, r.spiffeIDTxt)
 	rowBg := canvas.NewRectangle(clrCard)
-	r.container = container.NewStack(rowBg, content)
+	rowBg.CornerRadius = 8
+	rowBg.StrokeWidth = 1
+	rowBg.StrokeColor = clrBorder
+	r.bg = rowBg
+
+	card := container.NewStack(rowBg, container.NewPadded(content))
+	r.container = container.NewPadded(card)
 	r.ExtendBaseWidget(r)
 	return r
 }
@@ -105,8 +112,8 @@ func (c *CustomLabel) MinSize() fyne.Size {
 	return fyne.NewSize(min.Width, c.customHeight)
 }
 
-func showAgentInfo(details string, window fyne.Window) {
-	lines := strings.Split(details, "\n")
+func showAgentInfo(agentInfo servers.Agent, window fyne.Window) {
+	lines := strings.Split(agentInfo.String(), "\n")
 
 	type pair struct{ key, val string }
 	var pairs []pair
@@ -149,12 +156,16 @@ func showAgentInfo(details string, window fyne.Window) {
 	entry.Disable()
 
 	// 1. Define a smooth, light gray color for the background (Hex: #EBEBEB)
-	bgRect := canvas.NewRectangle(clrBg)
+	bgClr := clrBg
+	if agentInfo.Banned {
+		bgClr = color.NRGBA{R: 248, G: 234, B: 234, A: 255}
+	}
+	bgRect := canvas.NewRectangle(bgClr)
 
-	backgroundContainer := container.New(layout.NewMaxLayout(), bgRect, entry)
+	backgroundContainer := container.New(layout.NewStackLayout(), bgRect, container.NewPadded(entry))
 
 	d := dialog.NewCustom("Agent Details", "Close", backgroundContainer, window)
-	d.Resize(fyne.NewSize(600, 275))
+	d.Resize(fyne.NewSize(700, 380))
 	d.Show()
 }
 
@@ -222,15 +233,24 @@ func buildAgentsContent(spireServer *servers.SpireServer, window fyne.Window) fy
 			row.spiffeIDTxt.Text = spiffeID
 			row.spiffeIDTxt.Refresh()
 
+			if agent.Banned {
+				row.bg.FillColor = color.NRGBA{R: 248, G: 234, B: 234, A: 255}
+				row.bg.StrokeColor = color.NRGBA{R: 239, G: 68, B: 68, A: 255}
+			} else {
+				row.bg.FillColor = clrCard
+				row.bg.StrokeColor = clrBorder
+			}
+			row.bg.Refresh()
+
 			row.infoBtn.onTap = func() {
 				go func() {
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
-					info, err := spireServer.GetAgentInfo(ctx, spiffeID)
+					agentInfo, err := spireServer.GetAgentInfo(ctx, spiffeID)
 					if err != nil {
 						fyne.Do(func() { dialog.ShowError(err, window) })
 					} else {
-						fyne.Do(func() { showAgentInfo(info, window) })
+						fyne.Do(func() { showAgentInfo(agentInfo, window) })
 					}
 				}()
 			}

@@ -1,13 +1,17 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # This script generates a self-signed TLS certificate and private key
 # for local development and testing of the spire-admin-web server.
 
-CERT_DIR="certs"
+CERT_DIR="$1/spire-certs"
 CERT_FILE="$CERT_DIR/cert.pem"
 KEY_FILE="$CERT_DIR/key.pem"
 CA_FILE="$CERT_DIR/rootCA.pem"
 CA_KEY="$CERT_DIR/rootCA.key"
+
+if [ -d $CERT_DIR ]; then
+  rm -rf $CERT_DIR
+fi
 
 mkdir -p "$CERT_DIR"
 
@@ -23,6 +27,14 @@ openssl genrsa -out "$KEY_FILE" 2048
 # Create a Certificate Signing Request (CSR)
 openssl req -new -key "$KEY_FILE" -out "$CERT_DIR/server.csr" -subj "/CN=localhost"
 
+
+SYSTEM_IP=$(ip route get 8.8.8.8 2>/dev/null | awk '{print $7; exit}')
+
+# Fallback to 127.0.0.1 if the IP couldn't be detected
+if [ -z "$SYSTEM_IP" ]; then
+    SYSTEM_IP="127.0.0.1"
+fi
+
 # Create an extension file to define Subject Alternative Names (SAN)
 # Modern browsers require SAN to trust localhost certs
 cat > "$CERT_DIR/server.ext" <<EOF
@@ -31,8 +43,8 @@ basicConstraints=CA:FALSE
 keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
 subjectAltName = @alt_names
 [alt_names]
-DNS.1 = localhost
-IP.1 = 127.0.0.1
+DNS.1 = spirehost
+IP.1 = $SYSTEM_IP
 EOF
 
 # Sign the Server CSR with our Local Root CA

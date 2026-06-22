@@ -7,7 +7,7 @@
   --border: rgb(210, 205, 235);
   --text: rgb(30, 20, 60);
   --muted: rgb(90, 70, 130);
-  
+
   --green: rgb(34, 197, 94);
   --yellow: rgb(234, 179, 8);
   --red: rgb(239, 68, 68);
@@ -263,7 +263,9 @@ select {
   transition: border-color 0.2s;
 }
 
-input:focus, textarea:focus, select:focus {
+input:focus,
+textarea:focus,
+select:focus {
   outline: none;
   border-color: var(--accent);
 }
@@ -354,7 +356,8 @@ table {
   text-align: left;
 }
 
-th, td {
+th,
+td {
   padding: 14px 16px;
   font-size: 13px;
   border-bottom: 1px solid var(--border);
@@ -382,10 +385,21 @@ tr:hover td {
   margin-right: 8px;
 }
 
-.status-online { background-color: var(--green); }
-.status-connecting { background-color: var(--yellow); }
-.status-offline { background-color: var(--red); }
-.status-unknown { background-color: var(--muted); }
+.status-online {
+  background-color: var(--green);
+}
+
+.status-connecting {
+  background-color: var(--yellow);
+}
+
+.status-offline {
+  background-color: var(--red);
+}
+
+.status-unknown {
+  background-color: var(--muted);
+}
 
 /* Tabs inside Workspace */
 .tab-container {
@@ -430,7 +444,8 @@ tr:hover td {
 
 /* Modals */
 .modal {
-  display: none; /* Hidden by default */
+  display: none;
+  /* Hidden by default */
   position: fixed;
   top: 0;
   left: 0;
@@ -447,8 +462,8 @@ tr:hover td {
   background-color: var(--card);
   border: 1px solid var(--border);
   border-radius: 12px;
-  width: 500px;
-  max-width: 90%;
+  width: 600px;
+  max-width: 95%;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
@@ -456,7 +471,7 @@ tr:hover td {
 }
 
 .modal-header {
-  padding: 16px 20px;
+  padding: 20px 30px;
   border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
@@ -479,20 +494,20 @@ tr:hover td {
 }
 
 .modal-body {
-  padding: 20px;
+  padding: 24px 30px;
   display: flex;
   flex-direction: column;
-  gap: 15px;
-  max-height: 60vh;
+  gap: 20px;
+  max-height: 65vh;
   overflow-y: auto;
 }
 
 .modal-footer {
-  padding: 16px 20px;
+  padding: 20px 30px;
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 15px;
   background-color: var(--bg);
 }
 
@@ -556,4 +571,54 @@ tr:hover td {
   white-space: pre-wrap;
   color: var(--text);
   line-height: 1.5;
+}
+
+/* Agents Grid & Box Layout */
+.agents-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 5px 0;
+}
+
+.agent-box {
+  background-color: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 6px rgba(86, 61, 124, 0.03);
+  transition: all 0.2s ease;
+}
+
+.agent-box:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(86, 61, 124, 0.06);
+}
+
+.agent-box.banned {
+  background-color: rgb(254, 242, 242);
+  border-color: rgb(252, 165, 165);
+}
+
+.agent-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.agent-spiffeid {
+  font-family: monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.agent-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
 }
