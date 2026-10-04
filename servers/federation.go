@@ -15,46 +15,56 @@ type FederatedServer struct {
 	TrustDomain string
 }
 
+// FederationService manages dynamic federation relationships with external SPIRE trust domains.
+type FederationService struct {
+	ctx *ServerContext
+}
+
+// NewFederationService creates a new FederationService bound to the provided ServerContext.
+func NewFederationService(ctx *ServerContext) *FederationService {
+	return &FederationService{ctx: ctx}
+}
+
 // ListFederatedServers lists all servers with which this SPIRE server federates.
-func (s *SpireServer) ListFederatedServers(ctx context.Context, pull bool) ([]FederatedServer, error) {
+func (f *FederationService) ListFederatedServers(ctx context.Context, pull bool) ([]FederatedServer, error) {
 	if !pull {
-		s.mu.RLock()
-		if s.FederatedServers != nil {
-			defer s.mu.RUnlock()
-			return s.FederatedServers, nil
+		f.ctx.mu.RLock()
+		if f.ctx.FederatedServers != nil {
+			defer f.ctx.mu.RUnlock()
+			return f.ctx.FederatedServers, nil
 		}
-		s.mu.RUnlock()
+		f.ctx.mu.RUnlock()
 	}
 
-	rels, err := s.ListFederationRelationships(ctx)
+	rels, err := f.ListFederationRelationships(ctx)
 	if err != nil {
 		logger.Error("Failed to list federation relationships", err)
 		return nil, err
 	}
 
-	var servers []FederatedServer
+	var srvList []FederatedServer
 	for _, rel := range rels {
-		servers = append(servers, FederatedServer{
+		srvList = append(srvList, FederatedServer{
 			Address:     rel.BundleEndpointUrl,
 			TrustDomain: rel.TrustDomain,
 		})
 	}
 
-	s.mu.Lock()
-	s.FederatedServers = servers
-	s.mu.Unlock()
+	f.ctx.mu.Lock()
+	f.ctx.FederatedServers = srvList
+	f.ctx.mu.Unlock()
 
-	return servers, nil
+	return srvList, nil
 }
 
 // CreateFederationRelationship creates a dynamic federation relationship with a foreign trust domain.
-func (s *SpireServer) CreateFederationRelationship(ctx context.Context, rel *types.FederationRelationship) (*types.FederationRelationship, error) {
-	if err := s.Connect(ctx); err != nil {
+func (f *FederationService) CreateFederationRelationship(ctx context.Context, rel *types.FederationRelationship) (*types.FederationRelationship, error) {
+	if err := f.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return nil, err
 	}
 
-	client := trustdomainv1.NewTrustDomainClient(s.conn)
+	client := trustdomainv1.NewTrustDomainClient(f.ctx.conn)
 	resp, err := client.BatchCreateFederationRelationship(ctx, &trustdomainv1.BatchCreateFederationRelationshipRequest{
 		FederationRelationships: []*types.FederationRelationship{rel},
 	})
@@ -76,13 +86,13 @@ func (s *SpireServer) CreateFederationRelationship(ctx context.Context, rel *typ
 }
 
 // DeleteFederationRelationship deletes a dynamic federation relationship.
-func (s *SpireServer) DeleteFederationRelationship(ctx context.Context, trustDomain string) error {
-	if err := s.Connect(ctx); err != nil {
+func (f *FederationService) DeleteFederationRelationship(ctx context.Context, trustDomain string) error {
+	if err := f.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return err
 	}
 
-	client := trustdomainv1.NewTrustDomainClient(s.conn)
+	client := trustdomainv1.NewTrustDomainClient(f.ctx.conn)
 	resp, err := client.BatchDeleteFederationRelationship(ctx, &trustdomainv1.BatchDeleteFederationRelationshipRequest{
 		TrustDomains: []string{trustDomain},
 	})
@@ -99,13 +109,13 @@ func (s *SpireServer) DeleteFederationRelationship(ctx context.Context, trustDom
 }
 
 // ListFederationRelationships lists all dynamic federation relationships.
-func (s *SpireServer) ListFederationRelationships(ctx context.Context) ([]*types.FederationRelationship, error) {
-	if err := s.Connect(ctx); err != nil {
+func (f *FederationService) ListFederationRelationships(ctx context.Context) ([]*types.FederationRelationship, error) {
+	if err := f.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return nil, err
 	}
 
-	client := trustdomainv1.NewTrustDomainClient(s.conn)
+	client := trustdomainv1.NewTrustDomainClient(f.ctx.conn)
 	var allRels []*types.FederationRelationship
 	var pageToken string
 
@@ -127,13 +137,13 @@ func (s *SpireServer) ListFederationRelationships(ctx context.Context) ([]*types
 }
 
 // RefreshFederationBundle refreshes the bundle from the specified federated trust domain.
-func (s *SpireServer) RefreshFederationBundle(ctx context.Context, trustDomain string) error {
-	if err := s.Connect(ctx); err != nil {
+func (f *FederationService) RefreshFederationBundle(ctx context.Context, trustDomain string) error {
+	if err := f.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return err
 	}
 
-	client := trustdomainv1.NewTrustDomainClient(s.conn)
+	client := trustdomainv1.NewTrustDomainClient(f.ctx.conn)
 	_, err := client.RefreshBundle(ctx, &trustdomainv1.RefreshBundleRequest{
 		TrustDomain: trustDomain,
 	})
@@ -144,13 +154,13 @@ func (s *SpireServer) RefreshFederationBundle(ctx context.Context, trustDomain s
 }
 
 // GetFederationRelationship shows a dynamic federation relationship.
-func (s *SpireServer) GetFederationRelationship(ctx context.Context, trustDomain string) (*types.FederationRelationship, error) {
-	if err := s.Connect(ctx); err != nil {
+func (f *FederationService) GetFederationRelationship(ctx context.Context, trustDomain string) (*types.FederationRelationship, error) {
+	if err := f.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return nil, err
 	}
 
-	client := trustdomainv1.NewTrustDomainClient(s.conn)
+	client := trustdomainv1.NewTrustDomainClient(f.ctx.conn)
 	resp, err := client.GetFederationRelationship(ctx, &trustdomainv1.GetFederationRelationshipRequest{
 		TrustDomain: trustDomain,
 	})
@@ -161,13 +171,13 @@ func (s *SpireServer) GetFederationRelationship(ctx context.Context, trustDomain
 }
 
 // UpdateFederationRelationship updates a dynamic federation relationship with a foreign trust domain.
-func (s *SpireServer) UpdateFederationRelationship(ctx context.Context, rel *types.FederationRelationship, mask *types.FederationRelationshipMask) (*types.FederationRelationship, error) {
-	if err := s.Connect(ctx); err != nil {
+func (f *FederationService) UpdateFederationRelationship(ctx context.Context, rel *types.FederationRelationship, mask *types.FederationRelationshipMask) (*types.FederationRelationship, error) {
+	if err := f.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return nil, err
 	}
 
-	client := trustdomainv1.NewTrustDomainClient(s.conn)
+	client := trustdomainv1.NewTrustDomainClient(f.ctx.conn)
 	resp, err := client.BatchUpdateFederationRelationship(ctx, &trustdomainv1.BatchUpdateFederationRelationshipRequest{
 		FederationRelationships: []*types.FederationRelationship{rel},
 		InputMask:               mask,

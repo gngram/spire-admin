@@ -1,0 +1,7 @@
+{
+  "admin": {
+    "username": "admin",
+    "password": "$2a$10$pgVMf.Ja/vB0h7De94S.F.hb8pxMovQyYsJqBSlOi2GJdikw13GXW",
+    "is_admin": true
+  }
+}

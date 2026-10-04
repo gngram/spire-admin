@@ -8,23 +8,35 @@ import (
 	"github.com/gngram/spire_admin/logger"
 	bundlev1 "github.com/spiffe/spire-api-sdk/proto/spire/api/server/bundle/v1"
 	"github.com/spiffe/spire-api-sdk/proto/spire/api/types"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
+
+// BundleService manages trust bundles and federated bundle operations.
+type BundleService struct {
+	ctx *ServerContext
+}
+
+// NewBundleService creates a new BundleService bound to the provided ServerContext.
+func NewBundleService(ctx *ServerContext) *BundleService {
+	return &BundleService{ctx: ctx}
+}
 
 // AppendX509RootCA appends a new X.509 Root CA certificate to the trust bundle of a specific trust domain.
 // If the trustDomain is empty, it defaults to the server's own trust domain.
-func (s *SpireServer) AppendX509RootCA(ctx context.Context, trustDomain string, cert *x509.Certificate) error {
-	if err := s.Connect(ctx); err != nil {
+func (b *BundleService) AppendX509RootCA(ctx context.Context, trustDomain string, cert *x509.Certificate) error {
+	if err := b.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return err
 	}
 
 	if trustDomain == "" {
-		s.mu.RLock()
-		trustDomain = s.Domain
-		s.mu.RUnlock()
+		b.ctx.mu.RLock()
+		trustDomain = b.ctx.Domain
+		b.ctx.mu.RUnlock()
 	}
 
-	client := bundlev1.NewBundleClient(s.conn)
+	client := bundlev1.NewBundleClient(b.ctx.conn)
 	req := &bundlev1.AppendBundleRequest{
 		X509Authorities: []*types.X509Certificate{
 			{Asn1: cert.Raw}, // Provide the ASN.1 DER encoded bytes
@@ -40,21 +52,21 @@ func (s *SpireServer) AppendX509RootCA(ctx context.Context, trustDomain string, 
 
 // GetBundle retrieves the trust bundle (and its trusted Root CAs) for a specific trust domain.
 // If the trustDomain is empty, it defaults to the server's own trust domain.
-func (s *SpireServer) GetBundle(ctx context.Context, trustDomain string) (*types.Bundle, error) {
-	if err := s.Connect(ctx); err != nil {
+func (b *BundleService) GetBundle(ctx context.Context, trustDomain string) (*types.Bundle, error) {
+	if err := b.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return nil, err
 	}
 
-	s.mu.RLock()
-	serverDomain := s.Domain
-	s.mu.RUnlock()
+	b.ctx.mu.RLock()
+	serverDomain := b.ctx.Domain
+	b.ctx.mu.RUnlock()
 
 	if trustDomain == "" {
 		trustDomain = serverDomain
 	}
 
-	client := bundlev1.NewBundleClient(s.conn)
+	client := bundlev1.NewBundleClient(b.ctx.conn)
 	if trustDomain != serverDomain {
 		resp, err := client.GetFederatedBundle(ctx, &bundlev1.GetFederatedBundleRequest{
 			TrustDomain: trustDomain,
@@ -73,13 +85,13 @@ func (s *SpireServer) GetBundle(ctx context.Context, trustDomain string) (*types
 
 // DeleteFederatedBundle deletes federated bundle data.
 // The mode determines what happens if there are associated entries (e.g. RESTRICT, DELETE, DISSOCIATE).
-func (s *SpireServer) DeleteFederatedBundle(ctx context.Context, trustDomain string, mode bundlev1.BatchDeleteFederatedBundleRequest_Mode) error {
-	if err := s.Connect(ctx); err != nil {
+func (b *BundleService) DeleteFederatedBundle(ctx context.Context, trustDomain string, mode bundlev1.BatchDeleteFederatedBundleRequest_Mode) error {
+	if err := b.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return err
 	}
 
-	client := bundlev1.NewBundleClient(s.conn)
+	client := bundlev1.NewBundleClient(b.ctx.conn)
 	resp, err := client.BatchDeleteFederatedBundle(ctx, &bundlev1.BatchDeleteFederatedBundleRequest{
 		TrustDomains: []string{trustDomain},
 		Mode:         mode,
@@ -97,22 +109,22 @@ func (s *SpireServer) DeleteFederatedBundle(ctx context.Context, trustDomain str
 }
 
 // ListFederatedBundles lists federated bundle data.
-func (s *SpireServer) ListFederatedBundles(ctx context.Context, pull bool) ([]*types.Bundle, error) {
+func (b *BundleService) ListFederatedBundles(ctx context.Context, pull bool) ([]*types.Bundle, error) {
 	if !pull {
-		s.mu.RLock()
-		if s.Bundles != nil {
-			defer s.mu.RUnlock()
-			return s.Bundles, nil
+		b.ctx.mu.RLock()
+		if b.ctx.Bundles != nil {
+			defer b.ctx.mu.RUnlock()
+			return b.ctx.Bundles, nil
 		}
-		s.mu.RUnlock()
+		b.ctx.mu.RUnlock()
 	}
 
-	if err := s.Connect(ctx); err != nil {
+	if err := b.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return nil, err
 	}
 
-	client := bundlev1.NewBundleClient(s.conn)
+	client := bundlev1.NewBundleClient(b.ctx.conn)
 	var allBundles []*types.Bundle
 	var pageToken string
 
@@ -131,21 +143,21 @@ func (s *SpireServer) ListFederatedBundles(ctx context.Context, pull bool) ([]*t
 		}
 	}
 
-	s.mu.Lock()
-	s.Bundles = allBundles
-	s.mu.Unlock()
+	b.ctx.mu.Lock()
+	b.ctx.Bundles = allBundles
+	b.ctx.mu.Unlock()
 
 	return allBundles, nil
 }
 
 // SetFederatedBundle creates or updates federated bundle data.
-func (s *SpireServer) SetFederatedBundle(ctx context.Context, bundle *types.Bundle) (*types.Bundle, error) {
-	if err := s.Connect(ctx); err != nil {
+func (b *BundleService) SetFederatedBundle(ctx context.Context, bundle *types.Bundle) (*types.Bundle, error) {
+	if err := b.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return nil, err
 	}
 
-	client := bundlev1.NewBundleClient(s.conn)
+	client := bundlev1.NewBundleClient(b.ctx.conn)
 	resp, err := client.BatchSetFederatedBundle(ctx, &bundlev1.BatchSetFederatedBundleRequest{
 		Bundle: []*types.Bundle{bundle},
 	})
@@ -164,4 +176,9 @@ func (s *SpireServer) SetFederatedBundle(ctx context.Context, bundle *types.Bund
 	err = fmt.Errorf("unexpected empty response from server")
 	logger.Error("Set federated bundle empty response", err)
 	return nil, err
+}
+
+// CountBundles is a placeholder for counting trust bundles.
+func (b *BundleService) CountBundles(ctx context.Context) (int32, error) {
+	return 0, status.Errorf(codes.Unimplemented, "CountBundles is not yet implemented")
 }

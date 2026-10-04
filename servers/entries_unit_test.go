@@ -7,7 +7,7 @@ import (
 )
 
 func TestGetEntriesFiltering(t *testing.T) {
-	server := &SpireServer{
+	sCtx := &ServerContext{
 		Agents: []Agent{
 			{SPIFFEID: "spiffe://example.org/spire/agent/agent1"},
 			{SPIFFEID: "spiffe://example.org/spire/agent/agent2"},
@@ -51,7 +51,11 @@ func TestGetEntriesFiltering(t *testing.T) {
 		},
 	}
 
-	// 1. Verify Downstreams
+	server := &SpireServer{
+		ServerContext: sCtx,
+	}
+
+	// 1. Verify Downstreams via SpireServer facade
 	downstreams := server.GetDownstreamsEntries()
 	if len(downstreams) != 1 {
 		t.Fatalf("expected 1 downstream entry, got %d", len(downstreams))
@@ -60,8 +64,9 @@ func TestGetEntriesFiltering(t *testing.T) {
 		t.Errorf("expected downstream entry ID to be 'downstream1', got '%s'", downstreams[0].ID)
 	}
 
-	// 2. Verify Agents
-	agents := server.GetAgentsEntries()
+	// 2. Verify Agents via EntryService category directly
+	entryService := server.Entry()
+	agents := entryService.GetAgentsEntries()
 	if len(agents) != 3 {
 		t.Fatalf("expected 3 agent entries, got %d", len(agents))
 	}
@@ -76,8 +81,8 @@ func TestGetEntriesFiltering(t *testing.T) {
 		}
 	}
 
-	// 3. Verify Workloads
-	workloads := server.GetWorkloadsEntries()
+	// 3. Verify Workloads via EntryService category directly
+	workloads := entryService.GetWorkloadsEntries()
 	if len(workloads) != 1 {
 		t.Fatalf("expected 1 workload entry, got %d", len(workloads))
 	}

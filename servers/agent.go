@@ -9,6 +9,8 @@ import (
 	"github.com/gngram/spire_admin/logger"
 	agentv1 "github.com/spiffe/spire-api-sdk/proto/spire/api/server/agent/v1"
 	"github.com/spiffe/spire-api-sdk/proto/spire/api/types"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -39,24 +41,34 @@ func (a Agent) String() string {
 		a.SPIFFEID, a.AttestationType, expiration, a.SerialNumber, a.CanReattest, a.AgentVersion, a.Banned)
 }
 
+// AgentService manages SPIRE agents connected to the server.
+type AgentService struct {
+	ctx *ServerContext
+}
+
+// NewAgentService creates a new AgentService bound to the provided ServerContext.
+func NewAgentService(ctx *ServerContext) *AgentService {
+	return &AgentService{ctx: ctx}
+}
+
 // ListAgents lists all agents connected to the SPIRE server.
-func (s *SpireServer) ListAgents(ctx context.Context, pull bool) ([]Agent, error) {
+func (a *AgentService) ListAgents(ctx context.Context, pull bool) ([]Agent, error) {
 	logger.Info("List AGnets.........")
 	if !pull {
-		s.mu.RLock()
-		if s.Agents != nil {
-			defer s.mu.RUnlock()
-			logger.Info("Returning cached agents: %v", s.Agents)
-			return s.Agents, nil
+		a.ctx.mu.RLock()
+		if a.ctx.Agents != nil {
+			defer a.ctx.mu.RUnlock()
+			logger.Info("Returning cached agents: %v", a.ctx.Agents)
+			return a.ctx.Agents, nil
 		}
-		s.mu.RUnlock()
+		a.ctx.mu.RUnlock()
 	}
-	if err := s.Connect(ctx); err != nil {
+	if err := a.ctx.Connect(ctx); err != nil {
 		logger.Error("Connection Error", err)
 		return nil, err
 	}
 
-	client := agentv1.NewAgentClient(s.conn)
+	client := agentv1.NewAgentClient(a.ctx.conn)
 	var allAgents []Agent
 	var pageToken string
 
@@ -69,19 +81,19 @@ func (s *SpireServer) ListAgents(ctx context.Context, pull bool) ([]Agent, error
 			return nil, err
 		}
 
-		for _, a := range resp.Agents {
+		for _, ag := range resp.Agents {
 			spiffeID := "Unknown"
-			if a.Id != nil {
-				spiffeID = fmt.Sprintf("spiffe://%s%s", a.Id.TrustDomain, a.Id.Path)
+			if ag.Id != nil {
+				spiffeID = fmt.Sprintf("spiffe://%s%s", ag.Id.TrustDomain, ag.Id.Path)
 			}
 			allAgents = append(allAgents, Agent{
 				SPIFFEID:        spiffeID,
-				AttestationType: a.AttestationType,
-				ExpirationTime:  a.X509SvidExpiresAt,
-				SerialNumber:    a.X509SvidSerialNumber,
-				CanReattest:     a.CanReattest,
-				AgentVersion:    a.AgentVersion,
-				Banned:          a.Banned,
+				AttestationType: ag.AttestationType,
+				ExpirationTime:  ag.X509SvidExpiresAt,
+				SerialNumber:    ag.X509SvidSerialNumber,
+				CanReattest:     ag.CanReattest,
+				AgentVersion:    ag.AgentVersion,
+				Banned:          ag.Banned,
 			})
 		}
 
@@ -91,30 +103,15 @@ func (s *SpireServer) ListAgents(ctx context.Context, pull bool) ([]Agent, error
 			break
 		}
 	}
-	s.mu.Lock()
-	s.Agents = allAgents
-	s.mu.Unlock()
+	a.ctx.mu.Lock()
+	a.ctx.Agents = allAgents
+	a.ctx.mu.Unlock()
 	return allAgents, nil
 }
 
-// CreateJoinToken generates a new join token to register a new agent to the server.
-func (s *SpireServer) CreateJoinToken(ctx context.Context, ttlSeconds int32) (*types.JoinToken, error) {
-	if err := s.Connect(ctx); err != nil {
-		logger.Error("Connect error", err)
-		return nil, err
-	}
-
-	client := agentv1.NewAgentClient(s.conn)
-	resp, err := client.CreateJoinToken(ctx, &agentv1.CreateJoinTokenRequest{Ttl: ttlSeconds})
-	if err != nil {
-		logger.Error("Failed to create join token", err)
-	}
-	return resp, err
-}
-
 // BanAgent bans the agent with the given SPIFFE ID.
-func (s *SpireServer) BanAgent(ctx context.Context, spiffeID string) error {
-	if err := s.Connect(ctx); err != nil {
+func (a *AgentService) BanAgent(ctx context.Context, spiffeID string) error {
+	if err := a.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return err
 	}
@@ -125,7 +122,7 @@ func (s *SpireServer) BanAgent(ctx context.Context, spiffeID string) error {
 		return err
 	}
 
-	client := agentv1.NewAgentClient(s.conn)
+	client := agentv1.NewAgentClient(a.ctx.conn)
 	_, err = client.BanAgent(ctx, &agentv1.BanAgentRequest{Id: id})
 	if err != nil {
 		logger.Error("Failed to ban agent", err)
@@ -134,8 +131,8 @@ func (s *SpireServer) BanAgent(ctx context.Context, spiffeID string) error {
 }
 
 // EvictAgent evicts (deletes) the agent with the given SPIFFE ID.
-func (s *SpireServer) EvictAgent(ctx context.Context, spiffeID string) error {
-	if err := s.Connect(ctx); err != nil {
+func (a *AgentService) EvictAgent(ctx context.Context, spiffeID string) error {
+	if err := a.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return err
 	}
@@ -146,7 +143,7 @@ func (s *SpireServer) EvictAgent(ctx context.Context, spiffeID string) error {
 		return err
 	}
 
-	client := agentv1.NewAgentClient(s.conn)
+	client := agentv1.NewAgentClient(a.ctx.conn)
 	_, err = client.DeleteAgent(ctx, &agentv1.DeleteAgentRequest{Id: id})
 	if err != nil {
 		logger.Error("Failed to evict agent", err)
@@ -155,8 +152,8 @@ func (s *SpireServer) EvictAgent(ctx context.Context, spiffeID string) error {
 }
 
 // GetAgentInfo returns the details of the agent with the given SPIFFE ID.
-func (s *SpireServer) GetAgentInfo(ctx context.Context, spiffeID string) (Agent, error) {
-	if err := s.Connect(ctx); err != nil {
+func (a *AgentService) GetAgentInfo(ctx context.Context, spiffeID string) (Agent, error) {
+	if err := a.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return Agent{}, err
 	}
@@ -167,7 +164,7 @@ func (s *SpireServer) GetAgentInfo(ctx context.Context, spiffeID string) (Agent,
 		return Agent{}, err
 	}
 
-	client := agentv1.NewAgentClient(s.conn)
+	client := agentv1.NewAgentClient(a.ctx.conn)
 	resp, err := client.GetAgent(ctx, &agentv1.GetAgentRequest{Id: id})
 	if err != nil {
 		logger.Error("Failed to get agent details", err)
@@ -188,13 +185,13 @@ func (s *SpireServer) GetAgentInfo(ctx context.Context, spiffeID string) (Agent,
 }
 
 // PurgeExpiredAgents evicts all agents that have expired.
-func (s *SpireServer) PurgeExpiredAgents(ctx context.Context) error {
-	if err := s.Connect(ctx); err != nil {
+func (a *AgentService) PurgeExpiredAgents(ctx context.Context) error {
+	if err := a.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return err
 	}
 
-	client := agentv1.NewAgentClient(s.conn)
+	client := agentv1.NewAgentClient(a.ctx.conn)
 	var errs []string
 	var pageToken string
 
@@ -240,4 +237,9 @@ func (s *SpireServer) PurgeExpiredAgents(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// CountAgents is a placeholder for counting connected agents.
+func (a *AgentService) CountAgents(ctx context.Context) (int32, error) {
+	return 0, status.Errorf(codes.Unimplemented, "CountAgents is not yet implemented")
 }

@@ -19,23 +19,33 @@ type Entry struct {
 	Original  *types.Entry
 }
 
+// EntryService manages SPIRE workload and agent registration entries.
+type EntryService struct {
+	ctx *ServerContext
+}
+
+// NewEntryService creates a new EntryService bound to the provided ServerContext.
+func NewEntryService(ctx *ServerContext) *EntryService {
+	return &EntryService{ctx: ctx}
+}
+
 // ListEntries lists all entries registered in the SPIRE server.
-func (s *SpireServer) ListEntries(ctx context.Context, pull bool) ([]Entry, error) {
+func (e *EntryService) ListEntries(ctx context.Context, pull bool) ([]Entry, error) {
 	if !pull {
-		s.mu.RLock()
-		if s.Entries != nil {
-			defer s.mu.RUnlock()
-			return s.Entries, nil
+		e.ctx.mu.RLock()
+		if e.ctx.Entries != nil {
+			defer e.ctx.mu.RUnlock()
+			return e.ctx.Entries, nil
 		}
-		s.mu.RUnlock()
+		e.ctx.mu.RUnlock()
 	}
 
-	if err := s.Connect(ctx); err != nil {
+	if err := e.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return nil, err
 	}
 
-	client := entryv1.NewEntryClient(s.conn)
+	client := entryv1.NewEntryClient(e.ctx.conn)
 	var allEntries []Entry
 	var pageToken string
 
@@ -48,32 +58,32 @@ func (s *SpireServer) ListEntries(ctx context.Context, pull bool) ([]Entry, erro
 			return nil, err
 		}
 
-		for _, e := range resp.Entries {
+		for _, ent := range resp.Entries {
 			var selectors []string
-			for _, sel := range e.Selectors {
+			for _, sel := range ent.Selectors {
 				selectors = append(selectors, fmt.Sprintf("%s:%s", sel.Type, sel.Value))
 			}
 
-			s.mu.RLock()
-			domain := s.Domain
-			s.mu.RUnlock()
+			e.ctx.mu.RLock()
+			domain := e.ctx.Domain
+			e.ctx.mu.RUnlock()
 
 			spiffeID := "spiffe://" + domain + "/unknown"
-			if e.SpiffeId != nil {
-				spiffeID = fmt.Sprintf("spiffe://%s%s", e.SpiffeId.TrustDomain, e.SpiffeId.Path)
+			if ent.SpiffeId != nil {
+				spiffeID = fmt.Sprintf("spiffe://%s%s", ent.SpiffeId.TrustDomain, ent.SpiffeId.Path)
 			}
 
 			parent := ""
-			if e.ParentId != nil {
-				parent = fmt.Sprintf("spiffe://%s%s", e.ParentId.TrustDomain, e.ParentId.Path)
+			if ent.ParentId != nil {
+				parent = fmt.Sprintf("spiffe://%s%s", ent.ParentId.TrustDomain, ent.ParentId.Path)
 			}
 
 			allEntries = append(allEntries, Entry{
-				ID:        e.Id,
+				ID:        ent.Id,
 				SPIFFEID:  spiffeID,
 				Selectors: selectors,
 				Parent:    parent,
-				Original:  e,
+				Original:  ent,
 			})
 		}
 
@@ -83,21 +93,21 @@ func (s *SpireServer) ListEntries(ctx context.Context, pull bool) ([]Entry, erro
 		}
 	}
 
-	s.mu.Lock()
-	s.Entries = allEntries
-	s.mu.Unlock()
+	e.ctx.mu.Lock()
+	e.ctx.Entries = allEntries
+	e.ctx.mu.Unlock()
 
 	return allEntries, nil
 }
 
 // CountEntries returns the total number of registration entries in the SPIRE server.
-func (s *SpireServer) CountEntries(ctx context.Context) (int32, error) {
-	if err := s.Connect(ctx); err != nil {
+func (e *EntryService) CountEntries(ctx context.Context) (int32, error) {
+	if err := e.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return 0, err
 	}
 
-	client := entryv1.NewEntryClient(s.conn)
+	client := entryv1.NewEntryClient(e.ctx.conn)
 	resp, err := client.CountEntries(ctx, &entryv1.CountEntriesRequest{})
 	if err != nil {
 		logger.Error("Failed to count entries", err)
@@ -107,13 +117,13 @@ func (s *SpireServer) CountEntries(ctx context.Context) (int32, error) {
 }
 
 // CreateEntry creates a new registration entry.
-func (s *SpireServer) CreateEntry(ctx context.Context, entry *types.Entry) (*types.Entry, error) {
-	if err := s.Connect(ctx); err != nil {
+func (e *EntryService) CreateEntry(ctx context.Context, entry *types.Entry) (*types.Entry, error) {
+	if err := e.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return nil, err
 	}
 
-	client := entryv1.NewEntryClient(s.conn)
+	client := entryv1.NewEntryClient(e.ctx.conn)
 	resp, err := client.BatchCreateEntry(ctx, &entryv1.BatchCreateEntryRequest{
 		Entries: []*types.Entry{entry},
 	})
@@ -135,13 +145,13 @@ func (s *SpireServer) CreateEntry(ctx context.Context, entry *types.Entry) (*typ
 }
 
 // DeleteEntry deletes a registration entry by its ID.
-func (s *SpireServer) DeleteEntry(ctx context.Context, entryID string) error {
-	if err := s.Connect(ctx); err != nil {
+func (e *EntryService) DeleteEntry(ctx context.Context, entryID string) error {
+	if err := e.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return err
 	}
 
-	client := entryv1.NewEntryClient(s.conn)
+	client := entryv1.NewEntryClient(e.ctx.conn)
 	resp, err := client.BatchDeleteEntry(ctx, &entryv1.BatchDeleteEntryRequest{
 		Ids: []string{entryID},
 	})
@@ -158,13 +168,13 @@ func (s *SpireServer) DeleteEntry(ctx context.Context, entryID string) error {
 }
 
 // GetEntry displays a specific configured registration entry by its ID.
-func (s *SpireServer) GetEntry(ctx context.Context, entryID string) (*types.Entry, error) {
-	if err := s.Connect(ctx); err != nil {
+func (e *EntryService) GetEntry(ctx context.Context, entryID string) (*types.Entry, error) {
+	if err := e.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return nil, err
 	}
 
-	client := entryv1.NewEntryClient(s.conn)
+	client := entryv1.NewEntryClient(e.ctx.conn)
 	resp, err := client.GetEntry(ctx, &entryv1.GetEntryRequest{Id: entryID})
 	if err != nil {
 		logger.Error("Failed to get entry", err)
@@ -173,13 +183,13 @@ func (s *SpireServer) GetEntry(ctx context.Context, entryID string) (*types.Entr
 }
 
 // UpdateEntry updates an existing registration entry.
-func (s *SpireServer) UpdateEntry(ctx context.Context, entry *types.Entry) (*types.Entry, error) {
-	if err := s.Connect(ctx); err != nil {
+func (e *EntryService) UpdateEntry(ctx context.Context, entry *types.Entry) (*types.Entry, error) {
+	if err := e.ctx.Connect(ctx); err != nil {
 		logger.Error("Connect error", err)
 		return nil, err
 	}
 
-	client := entryv1.NewEntryClient(s.conn)
+	client := entryv1.NewEntryClient(e.ctx.conn)
 	resp, err := client.BatchUpdateEntry(ctx, &entryv1.BatchUpdateEntryRequest{
 		Entries: []*types.Entry{entry},
 	})
@@ -200,69 +210,69 @@ func (s *SpireServer) UpdateEntry(ctx context.Context, entry *types.Entry) (*typ
 	return nil, err
 }
 
-// GetAgentsEntries returns all entries classified as agent entries.
-func (s *SpireServer) GetAgentsEntries() []Entry {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+// GetAgentsEntries returns all entries classified as agent entries from cache.
+func (e *EntryService) GetAgentsEntries() []Entry {
+	e.ctx.mu.RLock()
+	defer e.ctx.mu.RUnlock()
 
 	var agents []Entry
-	for _, e := range s.Entries {
-		if e.Original != nil && e.Original.Downstream {
+	for _, ent := range e.ctx.Entries {
+		if ent.Original != nil && ent.Original.Downstream {
 			continue
 		}
 
 		isAgent := false
-		for _, a := range s.Agents {
-			if e.Parent == a.SPIFFEID {
+		for _, a := range e.ctx.Agents {
+			if ent.Parent == a.SPIFFEID {
 				isAgent = true
 				break
 			}
 		}
 
-		if isAgent || strings.Contains(e.Parent, "/spire/server") || strings.Contains(e.SPIFFEID, "/spire/agent/") {
-			agents = append(agents, e)
+		if isAgent || strings.Contains(ent.Parent, "/spire/server") || strings.Contains(ent.SPIFFEID, "/spire/agent/") {
+			agents = append(agents, ent)
 		}
 	}
 	return agents
 }
 
-// GetWorkloadsEntries returns all entries classified as workload entries.
-func (s *SpireServer) GetWorkloadsEntries() []Entry {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+// GetWorkloadsEntries returns all entries classified as workload entries from cache.
+func (e *EntryService) GetWorkloadsEntries() []Entry {
+	e.ctx.mu.RLock()
+	defer e.ctx.mu.RUnlock()
 
 	var workloads []Entry
-	for _, e := range s.Entries {
-		if e.Original != nil && e.Original.Downstream {
+	for _, ent := range e.ctx.Entries {
+		if ent.Original != nil && ent.Original.Downstream {
 			continue
 		}
 
 		isAgent := false
-		for _, a := range s.Agents {
-			if e.Parent == a.SPIFFEID {
+		for _, a := range e.ctx.Agents {
+			if ent.Parent == a.SPIFFEID {
 				isAgent = true
 				break
 			}
 		}
 
-		if isAgent || strings.Contains(e.Parent, "/spire/server") || strings.Contains(e.SPIFFEID, "/spire/agent/") {
+		if isAgent || strings.Contains(ent.Parent, "/spire/server") || strings.Contains(ent.SPIFFEID, "/spire/agent/") {
 			continue
 		}
 
-		workloads = append(workloads, e)
+		workloads = append(workloads, ent)
 	}
 	return workloads
 }
 
-// GetDownstreamsEntries returns all entries classified as downstream entries.
-func (s *SpireServer) GetDownstreamsEntries() []Entry {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+// GetDownstreamsEntries returns all entries classified as downstream entries from cache.
+func (e *EntryService) GetDownstreamsEntries() []Entry {
+	e.ctx.mu.RLock()
+	defer e.ctx.mu.RUnlock()
 
 	var downstreams []Entry
-	for _, e := range s.Entries {
-		if e.Original != nil && e.Original.Downstream {
-			downstreams = append(downstreams, e)
+	for _, ent := range e.ctx.Entries {
+		if ent.Original != nil && ent.Original.Downstream {
+			downstreams = append(downstreams, ent)
 		}
 	}
 	return downstreams
