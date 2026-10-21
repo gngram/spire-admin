@@ -3,6 +3,7 @@
 
 # Build output
 spire_admin
+spire-admin-web
 *.exe
 *.exe~
 *.test

@@ -28,26 +28,12 @@
             buildInputs = with pkgs; [
               gcc
               pkg-config
-              libGL
-              libGLU
-              # Fyne / GLFW Dependencies
-              libx11.dev
-              libxcursor
-              libxrandr
-              libxinerama
-              libxi.dev
-              libxxf86vm
-              libglvnd.dev # OpenGL headers
-              glfw
-              freetype
-              dbus
               openssl
             ];
             GO111MODULE = "on";
 
             shellHook = ''
               alias run="go run ."
-              alias build-desktop-app="go build ./apps/spire-admin-desktop"
               alias build-web-app="go build ./apps/spire-admin-web"
               alias fmt="find . -path ./.gopath -prune -o -name '*.go' -exec gofumpt -l -w {} +"
               export GOPATH="$PWD/.gopath"
@@ -64,7 +50,6 @@
               echo "                 SPIRE ADMIN"
               echo "================================================"
               echo "Shell commands:"
-              echo "build-desktop-app:   build desktop application"
               echo "build-web-app:       build web application"
               echo "================================================"
             '';

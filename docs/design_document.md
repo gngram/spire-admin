@@ -11,8 +11,6 @@ The console operates natively as an attested **SPIFFE Workload**. It connects to
 ```
 spire-admin
 ├── apps/
-│   ├── spire-admin-desktop/
-│   │   └── main.go                  # Desktop entry point (flags, logger, UI bootstrap)
 │   └── spire-admin-web/
 │       ├── main.go                  # Web entry point (TLS flags, socket check, HTTP server)
 │       ├── app.go                   # Gin REST controller, route registration & gRPC bridge
@@ -20,7 +18,6 @@ spire-admin
 ├── auth/
 │   └── auth.go                      # RBAC, JWT token lifecycle, bcrypt hashing, inactivity tracker
 ├── servers/
-│   ├── spire.go                     # SPIFFE ID retrieval helper via Workload API
 │   ├── server.go                    # SpireServer struct, gRPC mTLS dialing, Health, HCL parser
 │   ├── agent.go                     # Agent service client (List, Ban, Evict, Purge Expired, Join Tokens)
 │   ├── entries.go                   # Entry service client (CRUD, Workload/Agent/Downstream segmentation)
@@ -83,7 +80,7 @@ The sequence below captures the complete end-to-end identity lifecycle, attestat
 
 ### 4.1 Core Engine (`servers/` package)
 
-The `servers` package forms the core business logic layer shared by both Desktop and Web frontends:
+The `servers` package forms the core business logic layer utilized by the Web frontend:
 
 ```go
 type SpireServer struct {

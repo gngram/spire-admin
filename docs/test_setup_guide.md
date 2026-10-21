@@ -109,20 +109,11 @@ Upon successful startup, the script prints an operational summary:
 
 ---
 
-## 5. Connecting Admin Consoles to the Test Environment
+## 5. Connecting Web Console to the Test Environment
 
-Keep the terminal running the test script open. In separate terminals:
+Keep the terminal running the test script open. In a separate terminal:
 
-### 5.1 Connecting the Desktop GUI
-```bash
-# 1. Build desktop binary
-go build -o spire-admin-desktop ./apps/spire-admin-desktop
-
-# 2. Run pointing to the Admin Agent socket
-./spire-admin-desktop -socket /tmp/spire-data/spire-admin/agent.sock
-```
-
-### 5.2 Connecting the Web Console
+### 5.1 Connecting the Web Console
 ```bash
 # 1. Generate local development TLS certificates
 cd apps/spire-admin-web
@@ -139,7 +130,7 @@ go build -o spire-admin-web ./apps/spire-admin-web
 ```
 Open your browser at `https://localhost:8443` (Default login: `admin` / `admin123`).
 
-### 5.3 Adding Test Servers in the Console UI
+### 5.2 Adding Test Servers in the Console UI
 Under the **Servers** tab, register the servers:
 - **Admin Server**: Address `127.0.0.1`, Port `8081`
 - **Domain A Server**: Address `127.0.0.1`, Port `8082`
