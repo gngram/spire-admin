@@ -29,11 +29,12 @@ type Claims struct {
 }
 
 type Manager struct {
-	mu            sync.RWMutex
-	users         map[string]*User
-	jwtSigningKey []byte
+	mu             sync.RWMutex
+	users          map[string]*User
+	jwtSigningKey  []byte
 	SessionTimeout time.Duration
 	lastActivity   sync.Map // token string -> time.Time
+	OIDC           *OIDCManager
 }
 
 func NewManager(signingKey string, timeout time.Duration) *Manager {
@@ -284,3 +285,58 @@ func (m *Manager) issueToken(c *gin.Context, user *User) {
 		"is_admin": user.IsAdmin,
 	})
 }
+
+// SetOIDCManager binds an OIDCManager instance to the authentication manager.
+func (m *Manager) SetOIDCManager(o *OIDCManager) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.OIDC = o
+}
+
+// CreateExternalSessionToken creates an authenticated session JWT for external identity providers.
+func (m *Manager) CreateExternalSessionToken(username string, isAdmin bool) (string, error) {
+	// Invalidate prior active sessions for the same user
+	m.lastActivity.Range(func(key, value interface{}) bool {
+		tokenStr := key.(string)
+		claims := &Claims{}
+		token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+			return m.jwtSigningKey, nil
+		})
+		if err == nil && token.Valid && claims.Username == username {
+			m.lastActivity.Delete(tokenStr)
+		}
+		return true
+	})
+
+	claims := &Claims{
+		Username: username,
+		IsAdmin:  isAdmin,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(12 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ID:        strconv.FormatInt(time.Now().UnixNano(), 10),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(m.jwtSigningKey)
+	if err != nil {
+		return "", err
+	}
+
+	m.lastActivity.Store(tokenString, time.Now())
+	return tokenString, nil
+}
+
+// HandleAuthProviders returns the list of available authentication mechanisms.
+func (m *Manager) HandleAuthProviders(c *gin.Context) {
+	m.mu.RLock()
+	oidcEnabled := m.OIDC != nil
+	m.mu.RUnlock()
+
+	c.JSON(http.StatusOK, gin.H{
+		"oidc_enabled":  oidcEnabled,
+		"local_enabled": true,
+	})
+}
+

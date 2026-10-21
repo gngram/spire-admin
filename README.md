@@ -11,6 +11,7 @@ By integrating strong authentication (mTLS, SPIFFE identities, or enterprise ide
 ## 📚 Documentation
 
 - 🏛️ **[Architecture & Design Document](docs/design_document.md)**: Deep dive into the platform architecture, SPIFFE/Workload API integration, mTLS communication, multi-domain federation mechanics, and subsystem designs.
+- 🔐 **[Microsoft Entra ID (OIDC) Setup Guide](docs/oidc_setup_guide.md)**: Complete step-by-step guide to set up a free Microsoft Entra ID tenant, configure app registrations, map administrator roles, and test OIDC authentication.
 - 🧪 **[Test Setup & Execution Guide](docs/test_setup_guide.md)**: In-depth reference for running the multi-domain local SPIRE test environment, CLI options, console connections, and troubleshooting.
 
 ---
@@ -202,7 +203,7 @@ Run the web server by specifying the agent socket, SSL keys, and target port:
 ### 3. Log In as Administrator
 Open your browser and navigate to `https://localhost:8443`.
 
-#### 🔐 Default Credentials & Env Variables
+#### 🔐 Option A: Local Break-Glass Login (Default Credentials)
 By default, the server provisions a default administrator account:
 - **Username**: `admin`
 - **Password**: `admin123`
@@ -217,6 +218,26 @@ export ADMIN_PASSWORD="my_secure_password"
   -key /tmp/spire-certs/key.pem \
   -port 8443
 ```
+
+#### 🏢 Option B: Enterprise SSO with Microsoft Entra ID (OIDC)
+The console supports enterprise single sign-on (SSO) with Microsoft Entra ID (Azure Active Directory). To create your tenant and configure the app registration and administrator role mapping, follow the comprehensive **[Microsoft Entra ID (OIDC) Setup Guide](docs/oidc_setup_guide.md)**.
+
+Once registered, export the Entra ID credentials in your shell before starting the web console:
+```bash
+# Export Microsoft Entra ID OIDC environment variables
+export OIDC_TENANT_ID="<your-directory-tenant-id>"
+export OIDC_CLIENT_ID="<your-application-client-id>"
+export OIDC_CLIENT_SECRET="<your-client-secret-value>"
+export OIDC_ADMIN_ROLE="admin"
+
+# Launch the console with OIDC enabled
+./spire-admin-web \
+  -socket /tmp/spire-data/spire-admin/agent.sock \
+  -cert /tmp/spire-certs/cert.pem \
+  -key /tmp/spire-certs/key.pem \
+  -port 8443
+```
+On startup, the console will detect these variables, initialize the OIDC provider against `https://login.microsoftonline.com`, and display the **Sign in with Microsoft** button on the login screen.
 
 #### 🛡️ HTTPS CA Certificate & Trust Setup
 When connecting to the web server over HTTPS:

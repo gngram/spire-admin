@@ -60,11 +60,25 @@ func run(
 	sessionTimeout time.Duration,
 	certFile string,
 	keyFile string,
-	port int) {
+	port int,
+	oidcCfg auth.OIDCConfig) {
 
 	log.SetOutput(io.MultiWriter(os.Stdout, &webLogWriter{}))
 
 	app := NewWebApp(parentSocket, sessionTimeout)
+
+	if oidcCfg.ClientID != "" && (oidcCfg.TenantID != "" || oidcCfg.Issuer != "") {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		oidcMgr, err := auth.NewOIDCManager(ctx, oidcCfg)
+		if err != nil {
+			logger.Error("Failed to initialize OIDC provider: %v", err)
+		} else {
+			app.Auth.SetOIDCManager(oidcMgr)
+			logger.Info("OIDC authentication enabled (Client ID: %s, Redirect URL: %s)", oidcCfg.ClientID, oidcCfg.RedirectURL)
+		}
+	}
+
 	r := gin.Default()
 	r.SetTrustedProxies(nil)
 
@@ -78,7 +92,10 @@ func run(
 
 	api := r.Group("/api")
 	{
+		api.GET("/auth/providers", app.Auth.HandleAuthProviders)
 		api.POST("/login", app.Auth.HandleLogin)
+		api.GET("/auth/oidc/login", app.Auth.HandleOIDCLogin)
+		api.GET("/auth/callback", app.Auth.HandleOIDCCallback)
 
 		authGroup := api.Group("/")
 		authGroup.Use(app.Auth.AuthMiddleware())
